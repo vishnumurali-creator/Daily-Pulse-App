@@ -45,10 +45,24 @@ const App: React.FC = () => {
     const load = async () => {
       setLoading(true);
       const data = await fetchAppData();
-      setUsers(data.users.length > 0 ? data.users : INITIAL_USERS);
+      
+      // Determine which user list to use
+      const loadedUsers = data.users.length > 0 ? data.users : INITIAL_USERS;
+      setUsers(loadedUsers);
+      
       setCheckouts(data.checkouts);
       setTasks(data.tasks);
       setInteractions(data.interactions);
+      
+      // Check for saved session
+      const savedUserId = localStorage.getItem('dailyPulse_userId');
+      if (savedUserId) {
+        const returningUser = loadedUsers.find(u => u.userId === savedUserId);
+        if (returningUser) {
+          setCurrentUser(returningUser);
+        }
+      }
+      
       setLoading(false);
     };
     load();
@@ -58,11 +72,13 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
+    localStorage.setItem('dailyPulse_userId', user.userId); // Persist session
     setActiveTab(TabView.CHECKOUT); // Reset to default tab on login
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('dailyPulse_userId'); // Clear session
   };
 
   const handleAddCheckout = (data: Omit<DailyCheckout, 'checkoutId' | 'timestamp'>) => {
@@ -143,9 +159,13 @@ const App: React.FC = () => {
     
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
-    // Don't auto-login, let them select their new profile
+    
+    // Sync to backend
     syncItem('Users', newUser);
     setIsUserModalOpen(false);
+
+    // Auto-login the new user
+    handleLogin(newUser);
   };
 
   // --- Render ---
