@@ -22,7 +22,6 @@ import {
   PlusCircle,
   X,
   LogOut,
-  UserCircle2,
   ChevronRight
 } from 'lucide-react';
 
