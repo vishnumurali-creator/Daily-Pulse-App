@@ -1,6 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { DailyCheckout, Task } from "../types";
 
+// Standard workaround for process.env in Vite without @types/node explicit usage in some configs
+declare const process: any;
+
 const apiKey = process.env.API_KEY || '';
 // Initialize safe AI client, assuming key might be missing during initial dev
 const ai = new GoogleGenAI({ apiKey });
@@ -20,6 +23,10 @@ export const getAiCoachingInsight = async (
   
   const vibeHistory = recentCheckouts.map(c => c.vibeScore).join(', ');
 
+  // Calculate task stats
+  const completedTasks = tasks.filter(t => t.status === 'Done').length;
+  const totalTasks = tasks.length;
+
   const prompt = `
     You are a supportive, agile team coach. 
     Analyze the recent performance data for team member: ${userName}.
@@ -28,6 +35,7 @@ export const getAiCoachingInsight = async (
     - Recent Vibe Scores (1-10): [${vibeHistory}]
     - Recent Blockers:
     ${blockerHistory || "None reported recently."}
+    - Weekly Tasks: ${completedTasks} completed out of ${totalTasks} planned.
     
     Provide a concise, 2-sentence coaching insight or encouraging tip. 
     If vibe is low, suggest a small win. If blockers are frequent, suggest a strategy to unblock.

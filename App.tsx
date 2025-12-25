@@ -265,7 +265,7 @@ const App: React.FC = () => {
 };
 
 // Helper Subcomponent for Nav
-const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string; desktop?: boolean }> = ({ active, onClick, icon, label, desktop }) => (
+const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string; desktop?: boolean }> = ({ active, onClick, icon, label }) => (
   <button 
     onClick={onClick}
     className={`flex flex-col items-center justify-center w-full md:w-auto md:flex-row md:gap-2 md:px-6 md:py-2 md:rounded-full transition-all ${

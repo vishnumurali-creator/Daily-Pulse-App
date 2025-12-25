@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, Task } from '../types';
-import { Plus, Clock, CheckCircle2, Circle, AlertTriangle, Calendar, CalendarDays } from 'lucide-react';
+import { Plus, CheckCircle2, Circle, AlertTriangle, Calendar, CalendarDays } from 'lucide-react';
 
 interface PlannerProps {
   currentUser: User;

@@ -15,7 +15,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Flame, BrainCircuit, Loader2, Trophy, MessageSquareQuote, CheckCircle, XCircle } from 'lucide-react';
+import { Flame, BrainCircuit, Loader2, Trophy, MessageSquare, CheckCircle, XCircle } from 'lucide-react';
 import { getAiCoachingInsight } from '../services/geminiService';
 
 interface DashboardProps {
@@ -254,8 +254,32 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, users, checkouts, ta
               </div>
             </div>
 
-            {/* Highlights Reel */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col">
+            {/* Pomodoro Chart */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+              <h3 className="font-bold text-slate-800 mb-4">Est. vs Actual Focus</h3>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={pomodoroData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" tick={{fontSize: 10}} stroke="#94a3b8" />
+                    <YAxis tick={{fontSize: 10}} stroke="#94a3b8" />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }}/>
+                    <Bar dataKey="Estimated" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Actual" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Highlights Reel (Full Width now or split?) Let's keep it split but push it down if needed or leave as is. 
+               The grid is lg:grid-cols-2. If I add 3 items, the 3rd will be on a new row. 
+               Let's make Highlights full width on a new row.
+            */}
+          </div>
+          
+           {/* Row 4: Highlights */}
+           <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col">
               <div className="px-6 py-4 border-b border-slate-100">
                   <h3 className="font-bold text-slate-800">Highlights & Kudos</h3>
               </div>
@@ -274,7 +298,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, users, checkouts, ta
                                       </div>
                                   ) : (
                                       <div className="bg-indigo-100 text-indigo-600 p-1.5 rounded-full">
-                                          <MessageSquareQuote className="w-3 h-3" />
+                                          <MessageSquare className="w-3 h-3" />
                                       </div>
                                   )}
                                   <div>
@@ -296,7 +320,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, users, checkouts, ta
               </div>
             </div>
 
-          </div>
         </>
       ) : null}
 
