@@ -20,14 +20,19 @@ import {
   CalendarClock,
   Loader2,
   PlusCircle,
-  X
+  X,
+  LogOut,
+  UserCircle2,
+  ChevronRight
 } from 'lucide-react';
 
 const App: React.FC = () => {
   // State
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [currentUser, setCurrentUser] = useState<User>(INITIAL_USERS[1]); // Default to Bob
+  
+  // Auth State
+  const [currentUser, setCurrentUser] = useState<User | null>(null); // Null means logged out
   
   const [checkouts, setCheckouts] = useState<DailyCheckout[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -52,7 +57,17 @@ const App: React.FC = () => {
 
   // --- Handlers (Optimistic Updates + Sync) ---
 
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+    setActiveTab(TabView.CHECKOUT); // Reset to default tab on login
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+  };
+
   const handleAddCheckout = (data: Omit<DailyCheckout, 'checkoutId' | 'timestamp'>) => {
+    if (!currentUser) return;
     const newCheckout: DailyCheckout = {
       ...data,
       checkoutId: `c${Date.now()}`,
@@ -64,6 +79,7 @@ const App: React.FC = () => {
   };
 
   const handleAddKudos = (checkoutId: string) => {
+    if (!currentUser) return;
     const newInteraction: Interaction = {
       interactionId: `i${Date.now()}`,
       checkoutId,
@@ -76,6 +92,7 @@ const App: React.FC = () => {
   };
 
   const handleAddReply = (checkoutId: string, text: string) => {
+    if (!currentUser) return;
     const newInteraction: Interaction = {
       interactionId: `i${Date.now()}`,
       checkoutId,
@@ -122,13 +139,12 @@ const App: React.FC = () => {
       userId: `u${Date.now()}`,
       name,
       role,
-      // Use Dicebear for consistent, nice-looking avatars based on name
       avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${name}`, 
     };
     
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
-    setCurrentUser(newUser);
+    // Don't auto-login, let them select their new profile
     syncItem('Users', newUser);
     setIsUserModalOpen(false);
   };
@@ -143,6 +159,58 @@ const App: React.FC = () => {
       </div>
     );
   }
+
+  // --- Login Screen ---
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+          <div className="bg-indigo-600 p-8 text-center">
+             <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
+                <span className="text-white font-bold text-3xl">P</span>
+             </div>
+             <h1 className="text-2xl font-bold text-white mb-2">The Daily Pulse</h1>
+             <p className="text-indigo-100">Select your profile to check in.</p>
+          </div>
+          
+          <div className="p-6 space-y-3 max-h-[400px] overflow-y-auto">
+             {users.map(u => (
+               <button
+                 key={u.userId}
+                 onClick={() => handleLogin(u)}
+                 className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all group text-left"
+               >
+                 <img src={u.avatar} alt={u.name} className="w-12 h-12 rounded-full bg-slate-200 border border-slate-100" />
+                 <div className="flex-1">
+                   <h3 className="font-bold text-slate-800">{u.name}</h3>
+                   <span className={`text-xs px-2 py-0.5 rounded-full ${u.role === UserRole.MANAGER ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
+                     {u.role}
+                   </span>
+                 </div>
+                 <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-600 transition-colors" />
+               </button>
+             ))}
+          </div>
+
+          <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
+            <button 
+               onClick={() => setIsUserModalOpen(true)}
+               className="text-indigo-600 font-medium text-sm flex items-center justify-center gap-2 hover:underline"
+            >
+              <PlusCircle className="w-4 h-4" />
+              New Team Member?
+            </button>
+          </div>
+        </div>
+
+        {isUserModalOpen && (
+          <CreateUserModal onClose={() => setIsUserModalOpen(false)} onCreate={handleCreateUser} />
+        )}
+      </div>
+    );
+  }
+
+  // --- Main App (Logged In) ---
 
   const renderContent = () => {
     switch (activeTab) {
@@ -196,26 +264,20 @@ const App: React.FC = () => {
             <h1 className="font-bold text-lg tracking-tight hidden sm:block">The Daily Pulse</h1>
           </div>
           
-          {/* User Switcher & Creator */}
+          {/* User Profile & Logout */}
           <div className="flex items-center gap-3">
-             <span className="text-xs text-slate-400 uppercase font-bold hidden sm:inline">Viewing As:</span>
-             <select 
-              value={currentUser.userId}
-              onChange={(e) => setCurrentUser(users.find(u => u.userId === e.target.value) || users[0])}
-              className="text-sm border border-slate-300 rounded-md py-1 px-2 bg-slate-50 focus:ring-indigo-500 focus:border-indigo-500 max-w-[120px] sm:max-w-none"
-             >
-               {users.map(u => (
-                 <option key={u.userId} value={u.userId}>{u.name}</option>
-               ))}
-             </select>
+             <div className="flex flex-col items-end mr-1">
+                <span className="text-sm font-bold text-slate-700 leading-tight">{currentUser.name}</span>
+                <span className="text-[10px] font-medium text-slate-400 uppercase">{currentUser.role}</span>
+             </div>
+             <img src={currentUser.avatar} alt="avatar" className="w-9 h-9 rounded-full bg-slate-200 border border-slate-300" />
              <button 
-                onClick={() => setIsUserModalOpen(true)}
-                className="p-1 hover:bg-slate-100 rounded-full transition-colors text-indigo-600"
-                title="Add New User"
+               onClick={handleLogout}
+               className="ml-2 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+               title="Log Out"
              >
-                <PlusCircle className="w-6 h-6" />
+               <LogOut className="w-5 h-5" />
              </button>
-             <img src={currentUser.avatar} alt="avatar" className="w-8 h-8 rounded-full bg-slate-200 border border-slate-300" />
           </div>
         </div>
       </header>
@@ -285,11 +347,6 @@ const App: React.FC = () => {
               />
          </div>
       </nav>
-
-      {/* Create User Modal */}
-      {isUserModalOpen && (
-        <CreateUserModal onClose={() => setIsUserModalOpen(false)} onCreate={handleCreateUser} />
-      )}
     </div>
   );
 };
