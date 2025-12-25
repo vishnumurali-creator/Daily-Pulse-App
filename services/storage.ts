@@ -131,7 +131,7 @@ export const fetchAppData = async (): Promise<AppData> => {
   }
 };
 
-export const syncItem = async (type: 'Checkouts' | 'Tasks' | 'Interactions', payload: any) => {
+export const syncItem = async (type: 'Users' | 'Checkouts' | 'Tasks' | 'Interactions', payload: any) => {
   if (!API_URL) return;
 
   try {

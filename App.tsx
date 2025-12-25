@@ -5,6 +5,7 @@ import {
   Task, 
   Interaction, 
   TabView, 
+  UserRole,
 } from './types';
 import { INITIAL_USERS } from './constants';
 import DailyCheckoutForm from './components/DailyCheckout';
@@ -17,7 +18,9 @@ import {
   PenSquare, 
   Users, 
   CalendarClock,
-  Loader2
+  Loader2,
+  PlusCircle,
+  X
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -31,6 +34,7 @@ const App: React.FC = () => {
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   
   const [activeTab, setActiveTab] = useState<TabView>(TabView.CHECKOUT);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
 
   // Load Data on Mount
   useEffect(() => {
@@ -99,8 +103,6 @@ const App: React.FC = () => {
     const updatedTasks = tasks.map(t => {
       if (t.taskId === taskId) {
         const updated = { ...t, actualPomodoros: t.actualPomodoros + increment };
-        // Note: Full sync update logic would require an ID-based update endpoint, 
-        // simplified here to just local update for the prototype session.
         return updated;
       }
       return t;
@@ -113,6 +115,22 @@ const App: React.FC = () => {
       t.taskId === taskId ? { ...t, status: t.status === 'Done' ? 'To Do' : 'Done' } : t
     );
     setTasks(updatedTasks as Task[]);
+  };
+
+  const handleCreateUser = (name: string, role: UserRole) => {
+    const newUser: User = {
+      userId: `u${Date.now()}`,
+      name,
+      role,
+      // Use Dicebear for consistent, nice-looking avatars based on name
+      avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${name}`, 
+    };
+    
+    const updatedUsers = [...users, newUser];
+    setUsers(updatedUsers);
+    setCurrentUser(newUser);
+    syncItem('Users', newUser);
+    setIsUserModalOpen(false);
   };
 
   // --- Render ---
@@ -167,7 +185,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 md:pb-0">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 md:pb-0 relative">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -178,18 +196,25 @@ const App: React.FC = () => {
             <h1 className="font-bold text-lg tracking-tight hidden sm:block">The Daily Pulse</h1>
           </div>
           
-          {/* User Switcher for Demo */}
+          {/* User Switcher & Creator */}
           <div className="flex items-center gap-3">
              <span className="text-xs text-slate-400 uppercase font-bold hidden sm:inline">Viewing As:</span>
              <select 
               value={currentUser.userId}
               onChange={(e) => setCurrentUser(users.find(u => u.userId === e.target.value) || users[0])}
-              className="text-sm border border-slate-300 rounded-md py-1 px-2 bg-slate-50 focus:ring-indigo-500 focus:border-indigo-500"
+              className="text-sm border border-slate-300 rounded-md py-1 px-2 bg-slate-50 focus:ring-indigo-500 focus:border-indigo-500 max-w-[120px] sm:max-w-none"
              >
                {users.map(u => (
                  <option key={u.userId} value={u.userId}>{u.name}</option>
                ))}
              </select>
+             <button 
+                onClick={() => setIsUserModalOpen(true)}
+                className="p-1 hover:bg-slate-100 rounded-full transition-colors text-indigo-600"
+                title="Add New User"
+             >
+                <PlusCircle className="w-6 h-6" />
+             </button>
              <img src={currentUser.avatar} alt="avatar" className="w-8 h-8 rounded-full bg-slate-200 border border-slate-300" />
           </div>
         </div>
@@ -260,6 +285,11 @@ const App: React.FC = () => {
               />
          </div>
       </nav>
+
+      {/* Create User Modal */}
+      {isUserModalOpen && (
+        <CreateUserModal onClose={() => setIsUserModalOpen(false)} onCreate={handleCreateUser} />
+      )}
     </div>
   );
 };
@@ -278,5 +308,83 @@ const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.Re
     <span className={`text-[10px] md:text-sm font-medium ${active ? 'font-bold' : ''}`}>{label}</span>
   </button>
 );
+
+// Create User Modal Component
+const CreateUserModal: React.FC<{ onClose: () => void; onCreate: (name: string, role: UserRole) => void }> = ({ onClose, onCreate }) => {
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<UserRole>(UserRole.EMPLOYEE);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (name.trim()) {
+      onCreate(name, role);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
+        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h3 className="font-bold text-lg text-slate-800">Add New User</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
+            <input 
+              type="text" 
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full p-2 border border-slate-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder="e.g. Sarah Connor"
+              autoFocus
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Role</label>
+            <div className="flex gap-2">
+              <button 
+                type="button"
+                onClick={() => setRole(UserRole.EMPLOYEE)}
+                className={`flex-1 py-2 px-3 rounded border text-sm font-medium transition-all ${
+                  role === UserRole.EMPLOYEE 
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 ring-2 ring-indigo-500 ring-offset-1' 
+                    : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Employee
+              </button>
+              <button 
+                type="button"
+                onClick={() => setRole(UserRole.MANAGER)}
+                className={`flex-1 py-2 px-3 rounded border text-sm font-medium transition-all ${
+                  role === UserRole.MANAGER 
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 ring-2 ring-indigo-500 ring-offset-1' 
+                    : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Manager
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button 
+              type="submit"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg transition-colors"
+            >
+              Create Profile
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 export default App;
