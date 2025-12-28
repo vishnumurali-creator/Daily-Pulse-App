@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { DailyCheckout, User, Interaction, UserRole } from '../types';
+import { DailyCheckout, User, Interaction } from '../types';
 import { MessageSquare, Heart, ShieldAlert } from 'lucide-react';
 
 interface TeamFeedProps {
   checkouts: DailyCheckout[];
   users: User[];
-  currentUser: User;
   interactions: Interaction[];
   onAddKudos: (checkoutId: string) => void;
   onReply: (checkoutId: string, text: string) => void;
@@ -14,7 +13,6 @@ interface TeamFeedProps {
 const TeamFeed: React.FC<TeamFeedProps> = ({
   checkouts,
   users,
-  currentUser,
   interactions,
   onAddKudos,
   onReply,

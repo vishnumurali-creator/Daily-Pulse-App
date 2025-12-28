@@ -265,7 +265,6 @@ const App: React.FC = () => {
           <TeamFeed 
             checkouts={checkouts} 
             users={users} 
-            currentUser={currentUser}
             interactions={interactions}
             onAddKudos={handleAddKudos}
             onReply={handleAddReply}
