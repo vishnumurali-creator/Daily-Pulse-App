@@ -164,7 +164,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, users, checkouts, ta
               <div>
                 <p className="text-slate-500 text-sm font-medium">Overworked Days</p>
                 <h3 className={`text-3xl font-bold ${overworkedDaysCount > 0 ? 'text-red-600' : 'text-slate-900'}`}>{overworkedDaysCount}</h3>
-                <p className="text-[10px] text-slate-400">Days > 16 Pomos</p>
+                <p className="text-[10px] text-slate-400">Days &gt; 16 Pomos</p>
               </div>
               <div className={`${overworkedDaysCount > 0 ? 'bg-red-100' : 'bg-slate-100'} p-3 rounded-full`}>
                 <AlertTriangle className={`w-6 h-6 ${overworkedDaysCount > 0 ? 'text-red-500' : 'text-slate-400'}`} />
