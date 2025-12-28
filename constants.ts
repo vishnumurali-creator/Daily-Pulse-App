@@ -1,4 +1,4 @@
-import { User, UserRole, DailyCheckout, Task, Interaction } from './types';
+import { User, UserRole, DailyCheckout, Task, Interaction, WeeklyGoal } from './types';
 
 // Mock Users
 export const INITIAL_USERS: User[] = [
@@ -53,7 +53,7 @@ export const INITIAL_CHECKOUTS: DailyCheckout[] = [
   }
 ];
 
-// Mock Tasks
+// Mock Tasks (Daily Pomodoros)
 export const INITIAL_TASKS: Task[] = [
   {
     taskId: 't1',
@@ -84,16 +84,30 @@ export const INITIAL_TASKS: Task[] = [
     estimatedPomodoros: 10,
     actualPomodoros: 2,
     status: 'To Do',
+  }
+];
+
+// Mock Weekly Goals
+export const INITIAL_WEEKLY_GOALS: WeeklyGoal[] = [
+  {
+    goalId: 'g1',
+    userId: 'u2',
+    weekOfDate: '2023-10-23',
+    title: 'Ship the MVP Authentication',
+    definitionOfDone: 'Users can login, logout, and session persists.',
+    priority: 'High',
+    dependency: 'Backend API readiness',
+    status: 'In Progress',
+    retroText: ''
   },
   {
-    taskId: 't4',
+    goalId: 'g2',
     userId: 'u2',
-    taskDescription: 'Weekly Sync Prep',
     weekOfDate: '2023-10-23',
-    // No scheduled date (floating weekly task)
-    estimatedPomodoros: 2,
-    actualPomodoros: 0,
-    status: 'To Do',
+    title: 'Clean up technical debt',
+    definitionOfDone: 'Remove all unused imports and console logs.',
+    priority: 'Low',
+    status: 'Not Started',
   }
 ];
 

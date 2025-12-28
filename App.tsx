@@ -6,6 +6,7 @@ import {
   Interaction, 
   TabView, 
   UserRole,
+  WeeklyGoal,
 } from './types';
 import { INITIAL_USERS } from './constants';
 import DailyCheckoutForm from './components/DailyCheckout';
@@ -35,6 +36,7 @@ const App: React.FC = () => {
   
   const [checkouts, setCheckouts] = useState<DailyCheckout[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoal[]>([]);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   
   const [activeTab, setActiveTab] = useState<TabView>(TabView.CHECKOUT);
@@ -52,6 +54,7 @@ const App: React.FC = () => {
       
       setCheckouts(data.checkouts);
       setTasks(data.tasks);
+      setWeeklyGoals(data.weeklyGoals);
       setInteractions(data.interactions);
       
       // Check for saved session
@@ -120,6 +123,8 @@ const App: React.FC = () => {
     syncItem('Interactions', newInteraction);
   };
 
+  // --- Task (Daily) Handlers ---
+
   const handleAddTask = (taskData: Omit<Task, 'taskId' | 'actualPomodoros' | 'status'>) => {
     const newTask: Task = {
       ...taskData,
@@ -134,7 +139,7 @@ const App: React.FC = () => {
   const handleUpdatePomodoro = (taskId: string, increment: number) => {
     const updatedTasks = tasks.map(t => {
       if (t.taskId === taskId) {
-        const updated = { ...t, actualPomodoros: t.actualPomodoros + increment };
+        const updated = { ...t, actualPomodoros: Math.max(0, t.actualPomodoros + increment) };
         return updated;
       }
       return t;
@@ -147,6 +152,26 @@ const App: React.FC = () => {
       t.taskId === taskId ? { ...t, status: t.status === 'Done' ? 'To Do' : 'Done' } : t
     );
     setTasks(updatedTasks as Task[]);
+  };
+
+  // --- Weekly Goal Handlers ---
+
+  const handleAddWeeklyGoal = (goalData: Omit<WeeklyGoal, 'goalId'>) => {
+    const newGoal: WeeklyGoal = {
+      ...goalData,
+      goalId: `g${Date.now()}`,
+    };
+    setWeeklyGoals([newGoal, ...weeklyGoals]);
+    syncItem('WeeklyGoals', newGoal);
+  };
+
+  const handleUpdateWeeklyGoal = (goalId: string, updates: Partial<WeeklyGoal>) => {
+    const updatedGoals = weeklyGoals.map(g => 
+      g.goalId === goalId ? { ...g, ...updates } : g
+    );
+    setWeeklyGoals(updatedGoals);
+    // In a real app we'd need a specific sync update method, but for this demo appending a new row is how the sheet script works. 
+    // Since we can't edit existing rows in the simple script provided, we'll just update local state.
   };
 
   const handleCreateUser = (name: string, role: UserRole) => {
@@ -261,9 +286,12 @@ const App: React.FC = () => {
           <Planner 
             currentUser={currentUser}
             tasks={tasks}
+            weeklyGoals={weeklyGoals}
             onAddTask={handleAddTask}
             onUpdatePomodoro={handleUpdatePomodoro}
-            onToggleStatus={handleToggleTaskStatus}
+            onToggleTaskStatus={handleToggleTaskStatus}
+            onAddWeeklyGoal={handleAddWeeklyGoal}
+            onUpdateWeeklyGoal={handleUpdateWeeklyGoal}
           />
         );
       default:

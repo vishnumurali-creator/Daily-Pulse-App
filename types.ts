@@ -32,6 +32,18 @@ export interface Task {
   status: 'To Do' | 'Done';
 }
 
+export interface WeeklyGoal {
+  goalId: string;
+  userId: string;
+  weekOfDate: string;
+  title: string;
+  definitionOfDone: string;
+  priority: 'High' | 'Medium' | 'Low';
+  dependency?: string;
+  status: 'Not Started' | 'In Progress' | 'Completed';
+  retroText?: string;
+}
+
 export interface Interaction {
   interactionId: string;
   checkoutId: string;

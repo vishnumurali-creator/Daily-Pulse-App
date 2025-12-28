@@ -15,7 +15,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { Flame, BrainCircuit, Loader2, Trophy, MessageSquare, CheckCircle, XCircle } from 'lucide-react';
+import { Flame, BrainCircuit, Loader2, Trophy, MessageSquare, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { getAiCoachingInsight } from '../services/geminiService';
 
 interface DashboardProps {
@@ -50,6 +50,20 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, users, checkouts, ta
     { name: 'Achieved', value: completedTasks, color: '#22c55e' },
     { name: 'Missed', value: missedTasks, color: '#f1f5f9' },
   ];
+
+  // Overwork Calculation
+  const overworkedDaysCount = useMemo(() => {
+    // Group tasks by scheduled date
+    const pomosByDate: {[key: string]: number} = {};
+    userTasks.forEach(t => {
+      const date = t.scheduledDate || 'unknown';
+      if (date !== 'unknown') {
+        pomosByDate[date] = (pomosByDate[date] || 0) + t.estimatedPomodoros;
+      }
+    });
+    // Count days > 16
+    return Object.values(pomosByDate).filter(total => total > 16).length;
+  }, [userTasks]);
 
   // Highlights (Kudos & Manager Replies)
   const highlights = useMemo(() => {
@@ -134,8 +148,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, users, checkouts, ta
 
       {!isManager || (isManager && checkouts.filter(c => c.userId === currentUser.userId).length > 0) ? (
         <>
-           {/* Row 1: Streak & AI */}
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           {/* Row 1: Streak, AI & Overwork */}
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
               <div>
                 <p className="text-slate-500 text-sm font-medium">Consistency Streak</p>
@@ -143,6 +157,17 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, users, checkouts, ta
               </div>
               <div className="bg-orange-100 p-3 rounded-full">
                 <Flame className="w-6 h-6 text-orange-600" />
+              </div>
+            </div>
+
+            <div className={`p-6 rounded-xl shadow-sm border flex items-center justify-between ${overworkedDaysCount > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
+              <div>
+                <p className="text-slate-500 text-sm font-medium">Overworked Days</p>
+                <h3 className={`text-3xl font-bold ${overworkedDaysCount > 0 ? 'text-red-600' : 'text-slate-900'}`}>{overworkedDaysCount}</h3>
+                <p className="text-[10px] text-slate-400">Days > 16 Pomos</p>
+              </div>
+              <div className={`${overworkedDaysCount > 0 ? 'bg-red-100' : 'bg-slate-100'} p-3 rounded-full`}>
+                <AlertTriangle className={`w-6 h-6 ${overworkedDaysCount > 0 ? 'text-red-500' : 'text-slate-400'}`} />
               </div>
             </div>
 
@@ -271,11 +296,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser, users, checkouts, ta
                 </ResponsiveContainer>
               </div>
             </div>
-
-            {/* Highlights Reel (Full Width now or split?) Let's keep it split but push it down if needed or leave as is. 
-               The grid is lg:grid-cols-2. If I add 3 items, the 3rd will be on a new row. 
-               Let's make Highlights full width on a new row.
-            */}
           </div>
           
            {/* Row 4: Highlights */}

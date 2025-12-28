@@ -93,15 +93,13 @@ const TeamFeed: React.FC<TeamFeedProps> = ({
                 <span>{kudosCount || 'Kudos'}</span>
               </button>
 
-              {currentUser.role === UserRole.MANAGER && (
-                 <button
+               <button
                  onClick={() => setActiveReplyId(activeReplyId === checkout.checkoutId ? null : checkout.checkoutId)}
                  className="flex items-center gap-1.5 text-slate-600 hover:text-indigo-600 transition-colors text-sm font-medium"
                >
                  <MessageSquare className="w-4 h-4" />
                  <span>Reply</span>
                </button>
-              )}
             </div>
 
             {/* Replies Section */}
@@ -121,7 +119,7 @@ const TeamFeed: React.FC<TeamFeedProps> = ({
                   <div className="mt-4 flex gap-2">
                     <input
                       type="text"
-                      placeholder="Add a coaching comment..."
+                      placeholder="Add a comment..."
                       value={replyText[checkout.checkoutId] || ''}
                       onChange={(e) => setReplyText({ ...replyText, [checkout.checkoutId]: e.target.value })}
                       className="flex-1 text-sm border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
