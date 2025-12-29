@@ -27,18 +27,30 @@ const normalizeDate = (d: any): string => {
   if (!d) return '';
   const s = String(d).trim();
   
-  // Case 1: Strictly YYYY-MM-DD (e.g. manual entry "2025-01-29" or "2025-12-29")
-  // We accept this as absolute truth regardless of timezone.
-  // This prevents local timezone shifts if the string is already a clean date.
+  // Case 1: Strictly YYYY-MM-DD
   if (s.match(/^\d{4}-\d{2}-\d{2}$/)) {
     return s;
   }
+
+  // Case 2: Handle DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    return `${year}-${month}-${day}`;
+  }
   
-  // Case 2: ISO Strings (e.g. "2025-01-29T18:30:00.000Z") or other formats
-  // Google Sheets often serializes Date cells to UTC ISO strings.
-  // If the Sheet is in a timezone ahead of UTC (e.g. India, Europe), "Midnight Jan 29" becomes "Jan 28 18:30Z".
-  // Using UTC parsing (substring) would give "Jan 28".
-  // Using Local parsing restores it to "Jan 29" for the user (assuming they are in a similar timezone).
+  // Case 3: ISO Strings (e.g., 2025-12-29T00:00:00.000Z)
+  // We prefer the literal date part if it exists to avoid timezone shifts (e.g. UTC midnight -> Previous Day)
+  if (s.indexOf('T') > -1) {
+     const parts = s.split('T');
+     if (parts[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return parts[0];
+     }
+  }
+
+  // Case 4: Fallback Date Parsing
   const date = new Date(s);
   if (!isNaN(date.getTime())) {
     const year = date.getFullYear();
@@ -47,12 +59,35 @@ const normalizeDate = (d: any): string => {
     return `${year}-${month}-${day}`;
   }
   
-  // Case 3: Fallback for ISO strings if Date parse somehow failed but regex matches (unlikely)
-  if (s.match(/^\d{4}-\d{2}-\d{2}/)) {
-    return s.substring(0, 10);
-  }
-  
   return s;
+};
+
+// Helper: Ensure a date string snaps to the Monday of that week
+// Uses Local Time construction to prevent UTC-offset shifts
+const snapToMonday = (dateStr: string): string => {
+  if (!dateStr) return '';
+  
+  // Parse manually to avoid "new Date('YYYY-MM-DD')" being treated as UTC
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3) return dateStr;
+  
+  const [y, m, d] = parts;
+  // Construct Date in Local Time (Month is 0-indexed)
+  const date = new Date(y, m - 1, d);
+  
+  if (isNaN(date.getTime())) return dateStr;
+  
+  const day = date.getDay(); // 0 (Sun) to 6 (Sat)
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
+  
+  // Set date modifies the object in place and handles month/year rollovers
+  date.setDate(diff);
+  
+  const yearStr = date.getFullYear();
+  const monthStr = String(date.getMonth() + 1).padStart(2, '0');
+  const dayStr = String(date.getDate()).padStart(2, '0');
+  
+  return `${yearStr}-${monthStr}-${dayStr}`;
 };
 
 // Safe string trim
@@ -92,32 +127,40 @@ export const fetchAppData = async (): Promise<AppData> => {
     const data = await response.json();
 
     // Map and normalize data
-    const rawTasks = (data.tasks || []).map((t: any) => ({
-      ...t,
-      // Handle potential casing issues from sheet headers or missing fields
-      taskId: safeStr(t.taskId || t.TaskId),
-      userId: safeStr(t.userId || t.UserId),
-      taskDescription: t.taskDescription || t.TaskDescription || 'Untitled Task',
-      estimatedPomodoros: Number(t.estimatedPomodoros || t.EstimatedPomodoros || 0),
-      actualPomodoros: Number(t.actualPomodoros || t.ActualPomodoros || 0),
-      status: safeStr(t.status || t.Status || 'To Do'),
-      // Date normalization
-      weekOfDate: normalizeDate(t.weekOfDate || t.WeekOfDate),
-      scheduledDate: normalizeDate(t.scheduledDate || t.ScheduledDate),
-    }));
+    const rawTasks = (data.tasks || []).map((t: any) => {
+        const rawWeekDate = normalizeDate(t.weekOfDate || t.WeekOfDate);
+        return {
+            ...t,
+            taskId: safeStr(t.taskId || t.TaskId),
+            userId: safeStr(t.userId || t.UserId),
+            taskDescription: t.taskDescription || t.TaskDescription || 'Untitled Task',
+            estimatedPomodoros: Number(t.estimatedPomodoros || t.EstimatedPomodoros || 0),
+            actualPomodoros: Number(t.actualPomodoros || t.ActualPomodoros || 0),
+            status: safeStr(t.status || t.Status || 'To Do'),
+            weekOfDate: snapToMonday(rawWeekDate), // Ensure tasks are also snapped to Monday
+            scheduledDate: normalizeDate(t.scheduledDate || t.ScheduledDate),
+        };
+    });
 
-    const rawWeeklyGoals = (data.weeklyGoals || []).map((g: any) => ({
-      ...g,
-      goalId: safeStr(g.goalId || g.GoalId),
-      userId: safeStr(g.userId || g.UserId),
-      title: g.title || g.Title || 'Untitled Goal',
-      definitionOfDone: g.definitionOfDone || g.DefinitionOfDone || '',
-      priority: g.priority || g.Priority || 'Medium',
-      dependency: g.dependency || g.Dependency || '',
-      status: safeStr(g.status || g.Status || 'Not Started'),
-      retroText: g.retroText || g.RetroText || '',
-      weekOfDate: normalizeDate(g.weekOfDate || g.WeekOfDate),
-    }));
+    const rawWeeklyGoals = (data.weeklyGoals || []).map((g: any) => {
+      // Normalize the input date
+      const rawDate = normalizeDate(g.weekOfDate || g.WeekOfDate);
+      // Ensure it is mapped to the Monday of that week for consistent grouping
+      const weekStart = snapToMonday(rawDate);
+
+      return {
+        ...g,
+        goalId: safeStr(g.goalId || g.GoalId),
+        userId: safeStr(g.userId || g.UserId),
+        title: g.title || g.Title || 'Untitled Goal',
+        definitionOfDone: g.definitionOfDone || g.DefinitionOfDone || '',
+        priority: g.priority || g.Priority || 'Medium',
+        dependency: g.dependency || g.Dependency || '',
+        status: safeStr(g.status || g.Status || 'Not Started'),
+        retroText: g.retroText || g.RetroText || '',
+        weekOfDate: weekStart, // Use the snapped date
+      };
+    });
 
     const rawCheckouts = (data.checkouts || []).map((c: any) => ({
        ...c,
