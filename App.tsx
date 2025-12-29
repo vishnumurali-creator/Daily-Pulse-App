@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   User, 
   DailyCheckout, 
@@ -23,12 +23,14 @@ import {
   PlusCircle,
   X,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  RotateCcw
 } from 'lucide-react';
 
 const App: React.FC = () => {
   // State
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false); // Silent background sync state
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   
   // Auth State
@@ -42,34 +44,55 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabView>(TabView.CHECKOUT);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
 
-  // Load Data on Mount
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const data = await fetchAppData();
-      
-      // Determine which user list to use
-      const loadedUsers = data.users.length > 0 ? data.users : INITIAL_USERS;
-      setUsers(loadedUsers);
-      
-      setCheckouts(data.checkouts);
-      setTasks(data.tasks);
-      setWeeklyGoals(data.weeklyGoals);
-      setInteractions(data.interactions);
-      
-      // Check for saved session
-      const savedUserId = localStorage.getItem('dailyPulse_userId');
-      if (savedUserId) {
-        const returningUser = loadedUsers.find(u => u.userId === savedUserId);
-        if (returningUser) {
-          setCurrentUser(returningUser);
-        }
-      }
-      
-      setLoading(false);
-    };
-    load();
+  // Centralized Data Fetcher
+  const refreshData = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true);
+    else setIsSyncing(true);
+
+    const data = await fetchAppData();
+    
+    // Determine which user list to use
+    const loadedUsers = data.users.length > 0 ? data.users : INITIAL_USERS;
+    setUsers(loadedUsers);
+    
+    setCheckouts(data.checkouts);
+    setTasks(data.tasks);
+    setWeeklyGoals(data.weeklyGoals);
+    setInteractions(data.interactions);
+
+    if (!isBackground) setLoading(false);
+    else setIsSyncing(false);
   }, []);
+
+  // Load Data on Mount & Setup Polling
+  useEffect(() => {
+    // Initial Load
+    refreshData(false);
+
+    // Check for saved session
+    const savedUserId = localStorage.getItem('dailyPulse_userId');
+    if (savedUserId) {
+      // We need to wait for users to load, but we can optimistically set ID if needed
+      // However, correct way is to check against loaded users. 
+      // For now, simple re-hydration:
+      const rehydrateUser = async () => {
+         const data = await fetchAppData();
+         const allUsers = data.users.length > 0 ? data.users : INITIAL_USERS;
+         const returningUser = allUsers.find(u => u.userId === savedUserId);
+         if (returningUser) {
+            setCurrentUser(returningUser);
+         }
+      }
+      rehydrateUser();
+    }
+
+    // Polling Interval (every 15 seconds)
+    const intervalId = setInterval(() => {
+      refreshData(true);
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [refreshData]);
 
   // --- Handlers (Optimistic Updates + Sync) ---
 
@@ -195,7 +218,7 @@ const App: React.FC = () => {
 
   // --- Render ---
 
-  if (loading) {
+  if (loading && !currentUser) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center flex-col gap-4">
         <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
@@ -218,22 +241,28 @@ const App: React.FC = () => {
           </div>
           
           <div className="p-6 space-y-3 max-h-[400px] overflow-y-auto">
-             {users.map(u => (
-               <button
-                 key={u.userId}
-                 onClick={() => handleLogin(u)}
-                 className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all group text-left"
-               >
-                 <img src={u.avatar} alt={u.name} className="w-12 h-12 rounded-full bg-slate-200 border border-slate-100" />
-                 <div className="flex-1">
-                   <h3 className="font-bold text-slate-800">{u.name}</h3>
-                   <span className={`text-xs px-2 py-0.5 rounded-full ${u.role === UserRole.MANAGER ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
-                     {u.role}
-                   </span>
-                 </div>
-                 <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-600 transition-colors" />
-               </button>
-             ))}
+             {loading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                </div>
+             ) : (
+               users.map(u => (
+                 <button
+                   key={u.userId}
+                   onClick={() => handleLogin(u)}
+                   className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all group text-left"
+                 >
+                   <img src={u.avatar} alt={u.name} className="w-12 h-12 rounded-full bg-slate-200 border border-slate-100" />
+                   <div className="flex-1">
+                     <h3 className="font-bold text-slate-800">{u.name}</h3>
+                     <span className={`text-xs px-2 py-0.5 rounded-full ${u.role === UserRole.MANAGER ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
+                       {u.role}
+                     </span>
+                   </div>
+                   <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-600 transition-colors" />
+                 </button>
+               ))
+             )}
           </div>
 
           <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
@@ -308,11 +337,25 @@ const App: React.FC = () => {
               <span className="text-white font-bold text-lg">P</span>
             </div>
             <h1 className="font-bold text-lg tracking-tight hidden sm:block">The Daily Pulse</h1>
+            {isSyncing && (
+               <div className="flex items-center gap-1 ml-2 bg-slate-100 px-2 py-1 rounded text-[10px] text-slate-500 font-medium animate-pulse">
+                 <Loader2 className="w-3 h-3 animate-spin" />
+                 Syncing...
+               </div>
+            )}
           </div>
           
           {/* User Profile & Logout */}
           <div className="flex items-center gap-3">
-             <div className="flex flex-col items-end mr-1">
+             <button 
+               onClick={() => refreshData(false)} 
+               className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all"
+               title="Refresh Data"
+             >
+               <RotateCcw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+             </button>
+             
+             <div className="flex flex-col items-end mr-1 hidden xs:flex">
                 <span className="text-sm font-bold text-slate-700 leading-tight">{currentUser.name}</span>
                 <span className="text-[10px] font-medium text-slate-400 uppercase">{currentUser.role}</span>
              </div>

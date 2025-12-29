@@ -37,7 +37,8 @@ export const fetchAppData = async (): Promise<AppData> => {
   }
 
   try {
-    const response = await fetch(API_URL);
+    // Append timestamp to prevent browser caching
+    const response = await fetch(`${API_URL}?t=${Date.now()}`);
     const data = await response.json();
     return {
       users: data.users || INITIAL_USERS,
