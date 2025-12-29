@@ -31,6 +31,7 @@ const App: React.FC = () => {
   // State
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false); // Silent background sync state
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   
   // Auth State
@@ -60,6 +61,8 @@ const App: React.FC = () => {
     setWeeklyGoals(data.weeklyGoals);
     setInteractions(data.interactions);
 
+    setLastSynced(new Date());
+
     if (!isBackground) setLoading(false);
     else setIsSyncing(false);
   }, []);
@@ -78,6 +81,7 @@ const App: React.FC = () => {
       const rehydrateUser = async () => {
          const data = await fetchAppData();
          const allUsers = data.users.length > 0 ? data.users : INITIAL_USERS;
+         // Normalize saved ID just in case
          const returningUser = allUsers.find(u => u.userId === savedUserId);
          if (returningUser) {
             setCurrentUser(returningUser);
@@ -93,6 +97,15 @@ const App: React.FC = () => {
 
     return () => clearInterval(intervalId);
   }, [refreshData]);
+
+  // Handle Tab Switch
+  const handleTabChange = (tab: TabView) => {
+    setActiveTab(tab);
+    // If switching to Planner or Dashboard, force a background refresh to ensure fresh data
+    if (tab === TabView.PLANNER || tab === TabView.DASHBOARD) {
+        refreshData(true);
+    }
+  };
 
   // --- Handlers (Optimistic Updates + Sync) ---
 
@@ -337,11 +350,15 @@ const App: React.FC = () => {
               <span className="text-white font-bold text-lg">P</span>
             </div>
             <h1 className="font-bold text-lg tracking-tight hidden sm:block">The Daily Pulse</h1>
-            {isSyncing && (
+            {isSyncing ? (
                <div className="flex items-center gap-1 ml-2 bg-slate-100 px-2 py-1 rounded text-[10px] text-slate-500 font-medium animate-pulse">
                  <Loader2 className="w-3 h-3 animate-spin" />
                  Syncing...
                </div>
+            ) : lastSynced && (
+               <span className="ml-2 text-[10px] text-slate-400">
+                  Synced {lastSynced.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+               </span>
             )}
           </div>
           
@@ -381,25 +398,25 @@ const App: React.FC = () => {
         <div className="max-w-4xl mx-auto flex justify-around items-center h-16 md:hidden">
           <NavButton 
             active={activeTab === TabView.CHECKOUT} 
-            onClick={() => setActiveTab(TabView.CHECKOUT)} 
+            onClick={() => handleTabChange(TabView.CHECKOUT)} 
             icon={<PenSquare className="w-6 h-6" />} 
             label="Checkout" 
           />
            <NavButton 
             active={activeTab === TabView.FEED} 
-            onClick={() => setActiveTab(TabView.FEED)} 
+            onClick={() => handleTabChange(TabView.FEED)} 
             icon={<Users className="w-6 h-6" />} 
             label="Team Feed" 
           />
            <NavButton 
             active={activeTab === TabView.PLANNER} 
-            onClick={() => setActiveTab(TabView.PLANNER)} 
+            onClick={() => handleTabChange(TabView.PLANNER)} 
             icon={<CalendarClock className="w-6 h-6" />} 
             label="Planner" 
           />
            <NavButton 
             active={activeTab === TabView.DASHBOARD} 
-            onClick={() => setActiveTab(TabView.DASHBOARD)} 
+            onClick={() => handleTabChange(TabView.DASHBOARD)} 
             icon={<LayoutDashboard className="w-6 h-6" />} 
             label="Dash" 
           />
@@ -408,28 +425,28 @@ const App: React.FC = () => {
          <div className="hidden md:flex max-w-4xl mx-auto justify-center gap-8 py-4 bg-white/80 backdrop-blur-md sticky bottom-4 rounded-full shadow-lg border border-slate-200 mt-4 mb-8">
              <NavButton 
                 active={activeTab === TabView.CHECKOUT} 
-                onClick={() => setActiveTab(TabView.CHECKOUT)} 
+                onClick={() => handleTabChange(TabView.CHECKOUT)} 
                 icon={<PenSquare className="w-5 h-5" />} 
                 label="Daily Checkout" 
                 desktop
               />
                <NavButton 
                 active={activeTab === TabView.FEED} 
-                onClick={() => setActiveTab(TabView.FEED)} 
+                onClick={() => handleTabChange(TabView.FEED)} 
                 icon={<Users className="w-5 h-5" />} 
                 label="Team Feed" 
                  desktop
               />
                <NavButton 
                 active={activeTab === TabView.PLANNER} 
-                onClick={() => setActiveTab(TabView.PLANNER)} 
+                onClick={() => handleTabChange(TabView.PLANNER)} 
                 icon={<CalendarClock className="w-5 h-5" />} 
                 label="Planner" 
                  desktop
               />
                <NavButton 
                 active={activeTab === TabView.DASHBOARD} 
-                onClick={() => setActiveTab(TabView.DASHBOARD)} 
+                onClick={() => handleTabChange(TabView.DASHBOARD)} 
                 icon={<LayoutDashboard className="w-5 h-5" />} 
                 label="Dashboard" 
                  desktop

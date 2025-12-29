@@ -22,14 +22,33 @@ export interface AppData {
   interactions: Interaction[];
 }
 
-// Helper to ensure dates are YYYY-MM-DD string format
+// Robust Date Normalizer
 const normalizeDate = (d: any): string => {
   if (!d) return '';
-  if (typeof d === 'string') {
-    // If it's an ISO string like "2023-10-23T00:00:00.000Z", split it.
-    return d.split('T')[0];
+  const s = String(d).trim();
+  
+  // Case 1: ISO Format YYYY-MM-DD... (e.g. 2025-01-29T00:00...)
+  // We extract just the date part.
+  if (s.match(/^\d{4}-\d{2}-\d{2}/)) {
+    return s.substring(0, 10);
   }
-  return String(d);
+  
+  // Case 2: Try parsing other formats (e.g. 1/29/2025, Jan 29 2025)
+  // We use the browser's local time interpretation for non-ISO strings, which usually preserves the "day" intended.
+  const date = new Date(s);
+  if (!isNaN(date.getTime())) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  return s;
+};
+
+// Safe string trim
+const safeStr = (s: any): string => {
+  return s ? String(s).trim() : '';
 };
 
 export const fetchAppData = async (): Promise<AppData> => {
@@ -49,18 +68,21 @@ export const fetchAppData = async (): Promise<AppData> => {
   try {
     // Append timestamp to prevent browser caching
     const response = await fetch(`${API_URL}?t=${Date.now()}`);
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
     const data = await response.json();
 
     // Map and normalize data
     const tasks = (data.tasks || []).map((t: any) => ({
       ...t,
       // Handle potential casing issues from sheet headers or missing fields
-      taskId: t.taskId || t.TaskId,
-      userId: t.userId || t.UserId,
-      taskDescription: t.taskDescription || t.TaskDescription,
+      taskId: safeStr(t.taskId || t.TaskId),
+      userId: safeStr(t.userId || t.UserId),
+      taskDescription: t.taskDescription || t.TaskDescription || 'Untitled Task',
       estimatedPomodoros: Number(t.estimatedPomodoros || t.EstimatedPomodoros || 0),
       actualPomodoros: Number(t.actualPomodoros || t.ActualPomodoros || 0),
-      status: t.status || t.Status || 'To Do',
+      status: safeStr(t.status || t.Status || 'To Do'),
       // Date normalization
       weekOfDate: normalizeDate(t.weekOfDate || t.WeekOfDate),
       scheduledDate: normalizeDate(t.scheduledDate || t.ScheduledDate),
@@ -68,25 +90,38 @@ export const fetchAppData = async (): Promise<AppData> => {
 
     const weeklyGoals = (data.weeklyGoals || []).map((g: any) => ({
       ...g,
-      goalId: g.goalId || g.GoalId,
-      userId: g.userId || g.UserId,
-      title: g.title || g.Title,
-      definitionOfDone: g.definitionOfDone || g.DefinitionOfDone,
+      goalId: safeStr(g.goalId || g.GoalId),
+      userId: safeStr(g.userId || g.UserId),
+      title: g.title || g.Title || 'Untitled Goal',
+      definitionOfDone: g.definitionOfDone || g.DefinitionOfDone || '',
       priority: g.priority || g.Priority || 'Medium',
       dependency: g.dependency || g.Dependency || '',
-      status: g.status || g.Status || 'Not Started',
+      status: safeStr(g.status || g.Status || 'Not Started'),
       retroText: g.retroText || g.RetroText || '',
       weekOfDate: normalizeDate(g.weekOfDate || g.WeekOfDate),
     }));
 
     const checkouts = (data.checkouts || []).map((c: any) => ({
        ...c,
+       checkoutId: safeStr(c.checkoutId || c.CheckoutId),
+       userId: safeStr(c.userId || c.UserId),
        date: normalizeDate(c.date || c.Date),
        timestamp: Number(c.timestamp || c.Timestamp || 0)
     }));
 
+    const users = (data.users || []).map((u: any) => ({
+        ...u,
+        userId: safeStr(u.userId || u.UserId),
+        name: u.name || u.Name,
+        role: u.role || u.Role,
+        avatar: u.avatar || u.Avatar
+    }));
+    
+    // Fallback to initial users if sheet is empty (prevents lockout)
+    const finalUsers = users.length > 0 ? users : INITIAL_USERS;
+
     return {
-      users: data.users || INITIAL_USERS,
+      users: finalUsers,
       checkouts,
       tasks,
       weeklyGoals,
@@ -94,6 +129,7 @@ export const fetchAppData = async (): Promise<AppData> => {
     };
   } catch (error) {
     console.error("Failed to fetch data:", error);
+    // Return empty state on failure rather than mock data to avoid confusion
     return { users: INITIAL_USERS, checkouts: [], tasks: [], weeklyGoals: [], interactions: [] };
   }
 };
