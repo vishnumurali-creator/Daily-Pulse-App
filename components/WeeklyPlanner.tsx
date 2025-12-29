@@ -33,12 +33,6 @@ const toDateStr = (d: Date) => {
   return localDate.toISOString().split('T')[0];
 };
 
-const addDays = (dateStr: string, days: number) => {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days); // Date object handles month/year transitions
-  return toDateStr(d);
-};
-
 const getStartOfWeek = (dateStr: string) => {
   const d = new Date(dateStr);
   const day = d.getDay();
