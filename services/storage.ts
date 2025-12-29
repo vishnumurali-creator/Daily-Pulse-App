@@ -27,20 +27,29 @@ const normalizeDate = (d: any): string => {
   if (!d) return '';
   const s = String(d).trim();
   
-  // Case 1: ISO Format YYYY-MM-DD... (e.g. 2025-01-29T00:00...)
-  // We extract just the date part.
-  if (s.match(/^\d{4}-\d{2}-\d{2}/)) {
-    return s.substring(0, 10);
+  // Case 1: Strictly YYYY-MM-DD (e.g. manual entry "2025-01-29" or "2025-12-29")
+  // We accept this as absolute truth regardless of timezone.
+  // This prevents local timezone shifts if the string is already a clean date.
+  if (s.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return s;
   }
   
-  // Case 2: Try parsing other formats (e.g. 1/29/2025, Jan 29 2025)
-  // We use the browser's local time interpretation for non-ISO strings, which usually preserves the "day" intended.
+  // Case 2: ISO Strings (e.g. "2025-01-29T18:30:00.000Z") or other formats
+  // Google Sheets often serializes Date cells to UTC ISO strings.
+  // If the Sheet is in a timezone ahead of UTC (e.g. India, Europe), "Midnight Jan 29" becomes "Jan 28 18:30Z".
+  // Using UTC parsing (substring) would give "Jan 28".
+  // Using Local parsing restores it to "Jan 29" for the user (assuming they are in a similar timezone).
   const date = new Date(s);
   if (!isNaN(date.getTime())) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+  
+  // Case 3: Fallback for ISO strings if Date parse somehow failed but regex matches (unlikely)
+  if (s.match(/^\d{4}-\d{2}-\d{2}/)) {
+    return s.substring(0, 10);
   }
   
   return s;
