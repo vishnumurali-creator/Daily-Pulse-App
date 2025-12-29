@@ -26,11 +26,16 @@ interface PlannerProps {
 }
 
 // --- Date Helpers ---
-const toDateStr = (d: Date) => d.toISOString().split('T')[0];
+// Use local date string (YYYY-MM-DD) to avoid timezone shifts when user is just thinking in "Days"
+const toDateStr = (d: Date) => {
+  const offset = d.getTimezoneOffset() * 60000;
+  const localDate = new Date(d.getTime() - offset);
+  return localDate.toISOString().split('T')[0];
+};
 
 const addDays = (dateStr: string, days: number) => {
   const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
+  d.setDate(d.getDate() + days); // Date object handles month/year transitions
   return toDateStr(d);
 };
 
@@ -43,8 +48,10 @@ const getStartOfWeek = (dateStr: string) => {
 };
 
 const formatDateFriendly = (dateStr: string) => {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  // Parse date manually to avoid timezone issues with Date constructor
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dateObj = new Date(y, m - 1, d);
+  return dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 };
 
 const Planner: React.FC<PlannerProps> = ({
@@ -78,13 +85,16 @@ const Planner: React.FC<PlannerProps> = ({
 
   // --- Date Navigation Handlers ---
   const handlePrev = () => {
-    const shift = viewMode === 'today' ? -1 : -7;
-    setSelectedDate(prev => addDays(prev, shift));
+    // Manual date calculation to ensure string stability
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + (viewMode === 'today' ? -1 : -7));
+    setSelectedDate(toDateStr(d));
   };
 
   const handleNext = () => {
-    const shift = viewMode === 'today' ? 1 : 7;
-    setSelectedDate(prev => addDays(prev, shift));
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + (viewMode === 'today' ? 1 : 7));
+    setSelectedDate(toDateStr(d));
   };
 
   const handleJumpToToday = () => {
@@ -96,15 +106,14 @@ const Planner: React.FC<PlannerProps> = ({
   // --- Logic for Daily View ---
   const myDailyTasks = tasks.filter((t) => t.userId === currentUser.userId);
   
-  // Filter tasks strictly by the selected date
-  const filteredDailyTasks = myDailyTasks.filter(t => 
-    t.scheduledDate === selectedDate || 
-    // Fallback: if data is old and missing scheduledDate, match by week for safety, 
-    // but primarily rely on scheduledDate.
-    (!t.scheduledDate && t.weekOfDate === currentWeekStart) 
-  ).filter(t => {
-      // Strict filter for new data structure
+  // Filter tasks for the selected date.
+  const filteredDailyTasks = myDailyTasks.filter(t => {
+    // Primary: Match specific date
+    if (t.scheduledDate) {
       return t.scheduledDate === selectedDate;
+    }
+    // Fallback: Legacy tasks without scheduledDate, match by week
+    return t.weekOfDate === currentWeekStart;
   });
 
   // Calculate totals

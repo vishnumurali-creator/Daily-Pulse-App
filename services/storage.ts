@@ -22,6 +22,16 @@ export interface AppData {
   interactions: Interaction[];
 }
 
+// Helper to ensure dates are YYYY-MM-DD string format
+const normalizeDate = (d: any): string => {
+  if (!d) return '';
+  if (typeof d === 'string') {
+    // If it's an ISO string like "2023-10-23T00:00:00.000Z", split it.
+    return d.split('T')[0];
+  }
+  return String(d);
+};
+
 export const fetchAppData = async (): Promise<AppData> => {
   if (!API_URL) {
     console.warn("Using Mock Data (Configure API_URL in services/storage.ts to go live)");
@@ -40,11 +50,46 @@ export const fetchAppData = async (): Promise<AppData> => {
     // Append timestamp to prevent browser caching
     const response = await fetch(`${API_URL}?t=${Date.now()}`);
     const data = await response.json();
+
+    // Map and normalize data
+    const tasks = (data.tasks || []).map((t: any) => ({
+      ...t,
+      // Handle potential casing issues from sheet headers or missing fields
+      taskId: t.taskId || t.TaskId,
+      userId: t.userId || t.UserId,
+      taskDescription: t.taskDescription || t.TaskDescription,
+      estimatedPomodoros: Number(t.estimatedPomodoros || t.EstimatedPomodoros || 0),
+      actualPomodoros: Number(t.actualPomodoros || t.ActualPomodoros || 0),
+      status: t.status || t.Status || 'To Do',
+      // Date normalization
+      weekOfDate: normalizeDate(t.weekOfDate || t.WeekOfDate),
+      scheduledDate: normalizeDate(t.scheduledDate || t.ScheduledDate),
+    }));
+
+    const weeklyGoals = (data.weeklyGoals || []).map((g: any) => ({
+      ...g,
+      goalId: g.goalId || g.GoalId,
+      userId: g.userId || g.UserId,
+      title: g.title || g.Title,
+      definitionOfDone: g.definitionOfDone || g.DefinitionOfDone,
+      priority: g.priority || g.Priority || 'Medium',
+      dependency: g.dependency || g.Dependency || '',
+      status: g.status || g.Status || 'Not Started',
+      retroText: g.retroText || g.RetroText || '',
+      weekOfDate: normalizeDate(g.weekOfDate || g.WeekOfDate),
+    }));
+
+    const checkouts = (data.checkouts || []).map((c: any) => ({
+       ...c,
+       date: normalizeDate(c.date || c.Date),
+       timestamp: Number(c.timestamp || c.Timestamp || 0)
+    }));
+
     return {
       users: data.users || INITIAL_USERS,
-      checkouts: data.checkouts || [],
-      tasks: data.tasks || [],
-      weeklyGoals: data.weeklyGoals || [],
+      checkouts,
+      tasks,
+      weeklyGoals,
       interactions: data.interactions || []
     };
   } catch (error) {
