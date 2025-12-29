@@ -7,17 +7,24 @@ export const INITIAL_USERS: User[] = [
   { userId: 'u3', name: 'Charlie (Junior)', role: UserRole.EMPLOYEE, avatar: 'https://picsum.photos/seed/charlie/40/40' },
 ];
 
-// Helper to generate past dates
+// Helper to generate past dates in Local Time (Avoiding UTC shift issues)
+const toLocalISO = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const today = new Date();
-const todayStr = today.toISOString().split('T')[0];
+const todayStr = toLocalISO(today);
 
 const yesterday = new Date(today);
 yesterday.setDate(yesterday.getDate() - 1);
-const yesterdayStr = yesterday.toISOString().split('T')[0];
+const yesterdayStr = toLocalISO(yesterday);
 
 const twoDaysAgo = new Date(today);
 twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
+const twoDaysAgoStr = toLocalISO(twoDaysAgo);
 
 // Mock Checkouts
 export const INITIAL_CHECKOUTS: DailyCheckout[] = [

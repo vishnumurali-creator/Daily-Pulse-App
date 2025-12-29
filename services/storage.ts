@@ -27,9 +27,12 @@ export const normalizeDate = (d: any): string => {
   if (!d) return '';
   const s = String(d).trim();
   
-  // Case 1: Strictly YYYY-MM-DD
-  if (s.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    return s;
+  // Case 1: Eagerly match YYYY-MM-DD at start of string
+  // This catches "2025-12-29", "2025-12-29T00:00:00.000Z", "2025-12-29 10:00"
+  // It completely ignores timezones, trusting the Date String literal.
+  const isoMatch = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) {
+    return isoMatch[1];
   }
 
   // Case 2: DD-MM-YYYY or DD/MM/YYYY (with flexible separators)
@@ -40,14 +43,8 @@ export const normalizeDate = (d: any): string => {
     const year = dmyMatch[3];
     return `${year}-${month}-${day}`;
   }
-  
-  // Case 3: ISO Strings start (YYYY-MM-DD)
-  // We extract the date part directly to avoid timezone conversion
-  if (s.match(/^\d{4}-\d{2}-\d{2}T/)) {
-     return s.substring(0, 10);
-  }
 
-  // Case 4: Timestamp (Numeric) or other Date parsable string
+  // Case 3: Timestamp (Numeric) or other Date parsable string (e.g. "Sun Dec 29 ...")
   // If the input is numeric (timestamp) or a string that new Date() can parse
   const date = new Date(isNaN(Number(s)) ? s : Number(s));
   
@@ -62,7 +59,7 @@ export const normalizeDate = (d: any): string => {
          return `${year}-${month}-${day}`;
     }
 
-    // Otherwise, use Local Time (e.g. for "Now" timestamps)
+    // Otherwise, use Local Time (e.g. for "Now" timestamps or browser default string conversions)
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
