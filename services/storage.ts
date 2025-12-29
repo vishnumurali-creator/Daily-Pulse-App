@@ -25,6 +25,15 @@ export interface AppData {
 // Robust Date Normalizer
 export const normalizeDate = (d: any): string => {
   if (!d) return '';
+  
+  // Handle Date objects directly (Google Apps Script might return these)
+  if (d instanceof Date) {
+     const year = d.getFullYear();
+     const month = String(d.getMonth() + 1).padStart(2, '0');
+     const day = String(d.getDate()).padStart(2, '0');
+     return `${year}-${month}-${day}`;
+  }
+
   const s = String(d).trim();
   
   // Case 1: Eagerly match YYYY-MM-DD at start of string
@@ -35,17 +44,37 @@ export const normalizeDate = (d: any): string => {
     return isoMatch[1];
   }
 
-  // Case 2: DD-MM-YYYY or DD/MM/YYYY (with flexible separators)
+  // Case 2: DD-MM-YYYY or MM-DD-YYYY or DD/MM/YYYY
   const dmyMatch = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})$/);
   if (dmyMatch) {
-    const day = dmyMatch[1].padStart(2, '0');
-    const month = dmyMatch[2].padStart(2, '0');
+    let p1 = parseInt(dmyMatch[1], 10);
+    let p2 = parseInt(dmyMatch[2], 10);
     const year = dmyMatch[3];
-    return `${year}-${month}-${day}`;
+
+    // Ambiguity solver: If p1 > 12, it MUST be DD-MM. If p2 > 12, it MUST be MM-DD (though YYYY-MM-DD handled above).
+    // If both <= 12, assume DD-MM (common outside US) or MM-DD (US).
+    // Standard ISO is YYYY-MM-DD. 
+    // Here we default to: If p1 > 12, p1 is day. Else assume p1 is day (DD-MM) unless user is clearly US-based? 
+    // Let's check typical patterns. Google Sheets typically outputs user's locale format.
+    // We will assume DD-MM-YYYY as priority for consistency with ISO (Day first in mental model), 
+    // UNLESS p1 is clearly a valid month and p2 is a valid day > 12.
+    
+    let day = p1;
+    let month = p2;
+
+    // Swap if p1 is clearly month-range (<=12) and p2 is day-range (>12)
+    // Example: 12/29/2025 -> p1=12, p2=29. Day=29, Month=12.
+    if (p1 <= 12 && p2 > 12) {
+        month = p1;
+        day = p2;
+    } 
+    // Note: If both are <= 12 (e.g. 05/04/2025), we assume DD/MM (May 4th) as default, 
+    // unless strictly enforcing US format. Apps Script often sends YYYY-MM-DD so this is fallback.
+
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
   // Case 3: Timestamp (Numeric) or other Date parsable string (e.g. "Sun Dec 29 ...")
-  // If the input is numeric (timestamp) or a string that new Date() can parse
   const date = new Date(isNaN(Number(s)) ? s : Number(s));
   
   if (!isNaN(date.getTime())) {
@@ -59,7 +88,7 @@ export const normalizeDate = (d: any): string => {
          return `${year}-${month}-${day}`;
     }
 
-    // Otherwise, use Local Time (e.g. for "Now" timestamps or browser default string conversions)
+    // Otherwise, use Local Time.
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');

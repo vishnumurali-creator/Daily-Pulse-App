@@ -16,9 +16,17 @@ const DailyCheckoutForm: React.FC<DailyCheckoutProps> = ({ currentUser, onSubmit
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Generate Local YYYY-MM-DD to avoid timezone shifts (e.g. 8pm EST becoming tomorrow UTC)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const localDateStr = `${year}-${month}-${day}`;
+
     onSubmit({
       userId: currentUser.userId,
-      date: new Date().toISOString().split('T')[0],
+      date: localDateStr,
       vibeScore: vibe,
       winText: win,
       blockerText: blocker,
