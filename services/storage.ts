@@ -23,10 +23,11 @@ export interface AppData {
 }
 
 // Robust Date Normalizer
+// Solves the "Google Sheet Date Shift" problem where dates like 2025-12-29 become 2025-12-28T23:00:00Z
 export const normalizeDate = (d: any): string => {
   if (!d) return '';
   
-  // Handle Date objects directly (Google Apps Script might return these)
+  // Handle Date objects directly
   if (d instanceof Date) {
      const year = d.getFullYear();
      const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -36,12 +37,10 @@ export const normalizeDate = (d: any): string => {
 
   const s = String(d).trim();
   
-  // Case 1: Eagerly match YYYY-MM-DD at start of string
-  // This catches "2025-12-29", "2025-12-29T00:00:00.000Z", "2025-12-29 10:00"
-  // It completely ignores timezones, trusting the Date String literal.
-  const isoMatch = s.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (isoMatch) {
-    return isoMatch[1];
+  // Case 1: Strictly YYYY-MM-DD (No time component)
+  // We trust this literal value 100%
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return s;
   }
 
   // Case 2: DD-MM-YYYY or MM-DD-YYYY or DD/MM/YYYY
@@ -50,57 +49,49 @@ export const normalizeDate = (d: any): string => {
     let p1 = parseInt(dmyMatch[1], 10);
     let p2 = parseInt(dmyMatch[2], 10);
     const year = dmyMatch[3];
-
-    // Ambiguity solver: If p1 > 12, it MUST be DD-MM. If p2 > 12, it MUST be MM-DD (though YYYY-MM-DD handled above).
-    // If both <= 12, assume DD-MM (common outside US) or MM-DD (US).
-    // Standard ISO is YYYY-MM-DD. 
-    // Here we default to: If p1 > 12, p1 is day. Else assume p1 is day (DD-MM) unless user is clearly US-based? 
-    // Let's check typical patterns. Google Sheets typically outputs user's locale format.
-    // We will assume DD-MM-YYYY as priority for consistency with ISO (Day first in mental model), 
-    // UNLESS p1 is clearly a valid month and p2 is a valid day > 12.
     
+    // Heuristic for Ambiguous Dates
     let day = p1;
     let month = p2;
-
-    // Swap if p1 is clearly month-range (<=12) and p2 is day-range (>12)
-    // Example: 12/29/2025 -> p1=12, p2=29. Day=29, Month=12.
     if (p1 <= 12 && p2 > 12) {
         month = p1;
         day = p2;
     } 
-    // Note: If both are <= 12 (e.g. 05/04/2025), we assume DD/MM (May 4th) as default, 
-    // unless strictly enforcing US format. Apps Script often sends YYYY-MM-DD so this is fallback.
-
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
-  // Case 3: Timestamp (Numeric) or other Date parsable string (e.g. "Sun Dec 29 ...")
+  // Case 3: ISO Strings (with time) or Timestamps
+  // We apply "Nearest UTC Midnight" rounding to fix timezone shifts.
   const date = new Date(isNaN(Number(s)) ? s : Number(s));
   
   if (!isNaN(date.getTime())) {
-    // FIX: HEURISTIC FOR UTC MIDNIGHT
-    // If a date is exactly 00:00:00 UTC (common for stored "Date Only" values in DBs),
-    // use UTC components to prevent it shifting to the previous day in Western timezones.
-    if (date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0) {
-         const year = date.getUTCFullYear();
-         const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-         const day = String(date.getUTCDate()).padStart(2, '0');
-         return `${year}-${month}-${day}`;
+    // ROUNDING LOGIC:
+    // Google Sheets dates are often "Midnight" in a specific timezone.
+    // When serialized to UTC, they might become 23:00 (prev day) or 05:00 (same day).
+    // We round to the nearest UTC day.
+    
+    // Threshold: 12:00 PM UTC. 
+    // If >= 12, it implies the date drifted back from the NEXT day (e.g. 23:00 UTC = Midnight CET).
+    // If < 12, it implies the date drifted forward from CURRENT day (e.g. 05:00 UTC = Midnight EST).
+    const hours = date.getUTCHours();
+    
+    if (hours >= 12) {
+      date.setUTCDate(date.getUTCDate() + 1);
     }
-
-    // Otherwise, use Local Time.
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    
     return `${year}-${month}-${day}`;
   }
   
-  return s;
+  // Fallback
+  return s.substring(0, 10);
 };
 
 // Helper: Ensure a date string snaps to the Monday of that week
 // Uses Local Time construction to prevent UTC-offset shifts
-// Exported so components can use the exact same logic
 export const snapToMonday = (dateStr: string): string => {
   if (!dateStr) return '';
   
