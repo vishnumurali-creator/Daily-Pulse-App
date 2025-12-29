@@ -23,7 +23,7 @@ export interface AppData {
 }
 
 // Robust Date Normalizer
-const normalizeDate = (d: any): string => {
+export const normalizeDate = (d: any): string => {
   if (!d) return '';
   const s = String(d).trim();
   
@@ -64,7 +64,8 @@ const normalizeDate = (d: any): string => {
 
 // Helper: Ensure a date string snaps to the Monday of that week
 // Uses Local Time construction to prevent UTC-offset shifts
-const snapToMonday = (dateStr: string): string => {
+// Exported so components can use the exact same logic
+export const snapToMonday = (dateStr: string): string => {
   if (!dateStr) return '';
   
   // Parse manually to avoid "new Date('YYYY-MM-DD')" being treated as UTC

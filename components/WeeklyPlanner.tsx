@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Task, WeeklyGoal } from '../types';
+import { snapToMonday } from '../services/storage'; // Import centralized logic
 import { 
   Plus, 
   Minus, 
@@ -28,22 +29,18 @@ interface PlannerProps {
 // --- Date Helpers ---
 // Use local date string (YYYY-MM-DD) to avoid timezone shifts when user is just thinking in "Days"
 const toDateStr = (d: Date) => {
-  const offset = d.getTimezoneOffset() * 60000;
-  const localDate = new Date(d.getTime() - offset);
-  return localDate.toISOString().split('T')[0];
-};
-
-const getStartOfWeek = (dateStr: string) => {
-  const d = new Date(dateStr);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
-  const monday = new Date(d.setDate(diff));
-  return toDateStr(monday);
+  // Manual string construction to ensure Local YYYY-MM-DD
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const formatDateFriendly = (dateStr: string) => {
   // Parse date manually to avoid timezone issues with Date constructor
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3) return dateStr;
+  const [y, m, d] = parts;
   const dateObj = new Date(y, m - 1, d);
   return dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 };
@@ -80,22 +77,29 @@ const Planner: React.FC<PlannerProps> = ({
   // --- Date Navigation Handlers ---
   const handlePrev = () => {
     // Manual date calculation to ensure string stability
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + (viewMode === 'today' ? -1 : -7));
-    setSelectedDate(toDateStr(d));
+    const parts = selectedDate.split('-').map(Number);
+    const [y, m, d] = parts;
+    const date = new Date(y, m - 1, d);
+    
+    date.setDate(date.getDate() + (viewMode === 'today' ? -1 : -7));
+    setSelectedDate(toDateStr(date));
   };
 
   const handleNext = () => {
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + (viewMode === 'today' ? 1 : 7));
-    setSelectedDate(toDateStr(d));
+    const parts = selectedDate.split('-').map(Number);
+    const [y, m, d] = parts;
+    const date = new Date(y, m - 1, d);
+    
+    date.setDate(date.getDate() + (viewMode === 'today' ? 1 : 7));
+    setSelectedDate(toDateStr(date));
   };
 
   const handleJumpToToday = () => {
     setSelectedDate(toDateStr(new Date()));
   };
 
-  const currentWeekStart = getStartOfWeek(selectedDate);
+  // Use the centralized helper to guarantee alignment with backend data
+  const currentWeekStart = snapToMonday(selectedDate);
 
   // --- Logic for Daily View ---
   const myDailyTasks = tasks.filter((t) => t.userId === currentUser.userId);
