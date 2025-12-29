@@ -23,11 +23,11 @@ export interface AppData {
 }
 
 // Robust Date Normalizer
-// Solves the "Google Sheet Date Shift" problem where dates like 2025-12-29 become 2025-12-28T23:00:00Z
+// PRIORITIZES STRING EXTRACTION over Date Object parsing to avoid timezone shifts.
 export const normalizeDate = (d: any): string => {
   if (!d) return '';
   
-  // Handle Date objects directly
+  // 1. If it's already a Date object (Google Apps Script sometimes returns this)
   if (d instanceof Date) {
      const year = d.getFullYear();
      const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -37,56 +37,45 @@ export const normalizeDate = (d: any): string => {
 
   const s = String(d).trim();
   
-  // Case 1: Strictly YYYY-MM-DD (No time component)
-  // We trust this literal value 100%
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    return s;
+  // 2. Regex Extraction: Look for YYYY-MM-DD anywhere in the string.
+  // This is the safest way to handle ISO strings like "2023-10-25T23:00:00.000Z"
+  // We simply extract the date part literal, ignoring the time/zone completely.
+  const isoMatch = s.match(/(\d{4})[\-\/](\d{2})[\-\/](\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
   }
 
-  // Case 2: DD-MM-YYYY or MM-DD-YYYY or DD/MM/YYYY
-  const dmyMatch = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})$/);
+  // 3. Regex Extraction: Look for DD/MM/YYYY or DD-MM-YYYY
+  // Common in international formats
+  const dmyMatch = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})/);
   if (dmyMatch) {
     let p1 = parseInt(dmyMatch[1], 10);
     let p2 = parseInt(dmyMatch[2], 10);
     const year = dmyMatch[3];
     
-    // Heuristic for Ambiguous Dates
+    // Simple heuristic: If p1 > 12, it must be Day. If p2 > 12, it must be Day.
+    // If both <= 12, we default to DD-MM (international standard) unless logic suggests otherwise.
     let day = p1;
     let month = p2;
+    
+    // Swap if p1 looks like month (<=12) and p2 looks like day (>12) - likely US format MM/DD/YYYY
     if (p1 <= 12 && p2 > 12) {
         month = p1;
         day = p2;
     } 
+    
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
-  // Case 3: ISO Strings (with time) or Timestamps
-  // We apply "Nearest UTC Midnight" rounding to fix timezone shifts.
-  const date = new Date(isNaN(Number(s)) ? s : Number(s));
-  
+  // 4. Last Resort: Date Parsing (prone to timezone shifts, but better than nothing)
+  const date = new Date(s);
   if (!isNaN(date.getTime())) {
-    // ROUNDING LOGIC:
-    // Google Sheets dates are often "Midnight" in a specific timezone.
-    // When serialized to UTC, they might become 23:00 (prev day) or 05:00 (same day).
-    // We round to the nearest UTC day.
-    
-    // Threshold: 12:00 PM UTC. 
-    // If >= 12, it implies the date drifted back from the NEXT day (e.g. 23:00 UTC = Midnight CET).
-    // If < 12, it implies the date drifted forward from CURRENT day (e.g. 05:00 UTC = Midnight EST).
-    const hours = date.getUTCHours();
-    
-    if (hours >= 12) {
-      date.setUTCDate(date.getUTCDate() + 1);
-    }
-    
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
   
-  // Fallback
   return s.substring(0, 10);
 };
 
@@ -97,7 +86,7 @@ export const snapToMonday = (dateStr: string): string => {
   
   // Parse manually to avoid "new Date('YYYY-MM-DD')" being treated as UTC
   const parts = dateStr.split('-').map(Number);
-  if (parts.length !== 3) return dateStr;
+  if (parts.length < 3) return dateStr;
   
   const [y, m, d] = parts;
   // Construct Date in Local Time (Month is 0-indexed)
@@ -156,7 +145,13 @@ export const fetchAppData = async (): Promise<AppData> => {
 
     // Map and normalize data
     const rawTasks = (data.tasks || []).map((t: any) => {
-        const rawWeekDate = normalizeDate(t.weekOfDate || t.WeekOfDate);
+        // Handle Capitalized Headers often returned by Google Sheets
+        const weekDateRaw = t.weekOfDate || t.WeekOfDate;
+        const scheduledDateRaw = t.scheduledDate || t.ScheduledDate;
+        
+        const rawWeekDate = normalizeDate(weekDateRaw);
+        const rawScheduledDate = normalizeDate(scheduledDateRaw);
+
         return {
             ...t,
             taskId: safeStr(t.taskId || t.TaskId),
@@ -166,7 +161,7 @@ export const fetchAppData = async (): Promise<AppData> => {
             actualPomodoros: Number(t.actualPomodoros || t.ActualPomodoros || 0),
             status: safeStr(t.status || t.Status || 'To Do'),
             weekOfDate: snapToMonday(rawWeekDate), // Ensure tasks are also snapped to Monday
-            scheduledDate: normalizeDate(t.scheduledDate || t.ScheduledDate),
+            scheduledDate: rawScheduledDate,
         };
     });
 

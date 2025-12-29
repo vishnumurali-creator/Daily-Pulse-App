@@ -39,7 +39,7 @@ const toDateStr = (d: Date) => {
 const formatDateFriendly = (dateStr: string) => {
   // Parse date manually to avoid timezone issues with Date constructor
   const parts = dateStr.split('-').map(Number);
-  if (parts.length !== 3) return dateStr;
+  if (parts.length < 3) return dateStr;
   const [y, m, d] = parts;
   const dateObj = new Date(y, m - 1, d);
   return dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -56,6 +56,7 @@ const Planner: React.FC<PlannerProps> = ({
   onUpdateWeeklyGoal
 }) => {
   const [viewMode, setViewMode] = useState<'today' | 'week'>('today');
+  // Initialize with Today in Local Time
   const [selectedDate, setSelectedDate] = useState<string>(toDateStr(new Date()));
   
   // Daily State
@@ -106,11 +107,13 @@ const Planner: React.FC<PlannerProps> = ({
   
   // Filter tasks for the selected date.
   const filteredDailyTasks = myDailyTasks.filter(t => {
-    // Primary: Match specific date
-    if (t.scheduledDate) {
+    // 1. If a task has a specific scheduled date (and it's a valid string), compare exact date.
+    if (t.scheduledDate && t.scheduledDate.length >= 10) {
       return t.scheduledDate === selectedDate;
     }
-    // Fallback: Legacy tasks without scheduledDate, match by week
+    
+    // 2. Fallback: If no scheduledDate is set (legacy or week-level task),
+    // show it on ALL days of that week.
     return t.weekOfDate === currentWeekStart;
   });
 
