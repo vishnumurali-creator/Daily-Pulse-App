@@ -176,6 +176,8 @@ const App: React.FC = () => {
     const updatedTasks = tasks.map(t => {
       if (t.taskId === taskId) {
         const updated = { ...t, actualPomodoros: Math.max(0, t.actualPomodoros + increment) };
+        // Trigger sync for this specific task update
+        syncItem('Tasks', updated);
         return updated;
       }
       return t;
@@ -184,9 +186,14 @@ const App: React.FC = () => {
   };
 
   const handleToggleTaskStatus = (taskId: string) => {
-    const updatedTasks = tasks.map(t => 
-      t.taskId === taskId ? { ...t, status: t.status === 'Done' ? 'To Do' : 'Done' } : t
-    );
+    const updatedTasks = tasks.map(t => {
+      if (t.taskId === taskId) {
+        const updated = { ...t, status: t.status === 'Done' ? 'To Do' : 'Done' } as Task;
+        syncItem('Tasks', updated);
+        return updated;
+      }
+      return t;
+    });
     setTasks(updatedTasks as Task[]);
   };
 
@@ -202,12 +209,15 @@ const App: React.FC = () => {
   };
 
   const handleUpdateWeeklyGoal = (goalId: string, updates: Partial<WeeklyGoal>) => {
-    const updatedGoals = weeklyGoals.map(g => 
-      g.goalId === goalId ? { ...g, ...updates } : g
-    );
+    const updatedGoals = weeklyGoals.map(g => {
+      if (g.goalId === goalId) {
+        const updated = { ...g, ...updates };
+        syncItem('WeeklyGoals', updated);
+        return updated;
+      }
+      return g;
+    });
     setWeeklyGoals(updatedGoals);
-    // In a real app we'd need a specific sync update method, but for this demo appending a new row is how the sheet script works. 
-    // Since we can't edit existing rows in the simple script provided, we'll just update local state.
   };
 
   const handleCreateUser = (name: string, role: UserRole) => {

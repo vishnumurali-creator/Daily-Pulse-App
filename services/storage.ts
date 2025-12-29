@@ -1,4 +1,4 @@
-import { DailyCheckout, Task, Interaction, User, WeeklyGoal } from '../types';
+import { DailyCheckout, Task, Interaction, User, WeeklyGoal, UserRole } from '../types';
 import { INITIAL_USERS, INITIAL_CHECKOUTS, INITIAL_TASKS, INITIAL_INTERACTIONS, INITIAL_WEEKLY_GOALS } from '../constants';
 
 // ==========================================
@@ -60,6 +60,15 @@ const safeStr = (s: any): string => {
   return s ? String(s).trim() : '';
 };
 
+// Deduplicate array by ID, keeping the LAST occurrence (Latest update wins)
+const dedupeById = <T>(items: T[], idKey: keyof T): T[] => {
+  const map = new Map<any, T>();
+  items.forEach(item => {
+    map.set(item[idKey], item);
+  });
+  return Array.from(map.values());
+};
+
 export const fetchAppData = async (): Promise<AppData> => {
   if (!API_URL) {
     console.warn("Using Mock Data (Configure API_URL in services/storage.ts to go live)");
@@ -83,7 +92,7 @@ export const fetchAppData = async (): Promise<AppData> => {
     const data = await response.json();
 
     // Map and normalize data
-    const tasks = (data.tasks || []).map((t: any) => ({
+    const rawTasks = (data.tasks || []).map((t: any) => ({
       ...t,
       // Handle potential casing issues from sheet headers or missing fields
       taskId: safeStr(t.taskId || t.TaskId),
@@ -97,7 +106,7 @@ export const fetchAppData = async (): Promise<AppData> => {
       scheduledDate: normalizeDate(t.scheduledDate || t.ScheduledDate),
     }));
 
-    const weeklyGoals = (data.weeklyGoals || []).map((g: any) => ({
+    const rawWeeklyGoals = (data.weeklyGoals || []).map((g: any) => ({
       ...g,
       goalId: safeStr(g.goalId || g.GoalId),
       userId: safeStr(g.userId || g.UserId),
@@ -110,7 +119,7 @@ export const fetchAppData = async (): Promise<AppData> => {
       weekOfDate: normalizeDate(g.weekOfDate || g.WeekOfDate),
     }));
 
-    const checkouts = (data.checkouts || []).map((c: any) => ({
+    const rawCheckouts = (data.checkouts || []).map((c: any) => ({
        ...c,
        checkoutId: safeStr(c.checkoutId || c.CheckoutId),
        userId: safeStr(c.userId || c.UserId),
@@ -118,22 +127,21 @@ export const fetchAppData = async (): Promise<AppData> => {
        timestamp: Number(c.timestamp || c.Timestamp || 0)
     }));
 
-    const users = (data.users || []).map((u: any) => ({
-        ...u,
+    const rawUsers: User[] = (data.users || []).map((u: any) => ({
         userId: safeStr(u.userId || u.UserId),
         name: u.name || u.Name,
-        role: u.role || u.Role,
+        role: (u.role || u.Role) as UserRole,
         avatar: u.avatar || u.Avatar
     }));
     
     // Fallback to initial users if sheet is empty (prevents lockout)
-    const finalUsers = users.length > 0 ? users : INITIAL_USERS;
+    const finalUsers = rawUsers.length > 0 ? dedupeById(rawUsers, 'userId') : INITIAL_USERS;
 
     return {
       users: finalUsers,
-      checkouts,
-      tasks,
-      weeklyGoals,
+      checkouts: dedupeById(rawCheckouts, 'checkoutId'),
+      tasks: dedupeById(rawTasks, 'taskId'),
+      weeklyGoals: dedupeById(rawWeeklyGoals, 'goalId'),
       interactions: data.interactions || []
     };
   } catch (error) {
