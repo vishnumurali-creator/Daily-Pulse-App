@@ -32,8 +32,8 @@ export const normalizeDate = (d: any): string => {
     return s;
   }
 
-  // Case 2: Handle DD-MM-YYYY or DD/MM/YYYY
-  const dmyMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  // Case 2: DD-MM-YYYY or DD/MM/YYYY (with flexible separators)
+  const dmyMatch = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})$/);
   if (dmyMatch) {
     const day = dmyMatch[1].padStart(2, '0');
     const month = dmyMatch[2].padStart(2, '0');
@@ -41,18 +41,28 @@ export const normalizeDate = (d: any): string => {
     return `${year}-${month}-${day}`;
   }
   
-  // Case 3: ISO Strings (e.g., 2025-12-29T00:00:00.000Z)
-  // We prefer the literal date part if it exists to avoid timezone shifts (e.g. UTC midnight -> Previous Day)
-  if (s.indexOf('T') > -1) {
-     const parts = s.split('T');
-     if (parts[0].match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return parts[0];
-     }
+  // Case 3: ISO Strings start (YYYY-MM-DD)
+  // We extract the date part directly to avoid timezone conversion
+  if (s.match(/^\d{4}-\d{2}-\d{2}T/)) {
+     return s.substring(0, 10);
   }
 
-  // Case 4: Fallback Date Parsing
-  const date = new Date(s);
+  // Case 4: Timestamp (Numeric) or other Date parsable string
+  // If the input is numeric (timestamp) or a string that new Date() can parse
+  const date = new Date(isNaN(Number(s)) ? s : Number(s));
+  
   if (!isNaN(date.getTime())) {
+    // FIX: HEURISTIC FOR UTC MIDNIGHT
+    // If a date is exactly 00:00:00 UTC (common for stored "Date Only" values in DBs),
+    // use UTC components to prevent it shifting to the previous day in Western timezones.
+    if (date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0) {
+         const year = date.getUTCFullYear();
+         const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+         const day = String(date.getUTCDate()).padStart(2, '0');
+         return `${year}-${month}-${day}`;
+    }
+
+    // Otherwise, use Local Time (e.g. for "Now" timestamps)
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
