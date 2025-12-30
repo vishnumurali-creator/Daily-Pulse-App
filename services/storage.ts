@@ -23,81 +23,91 @@ export interface AppData {
 }
 
 // Robust Date Normalizer
-// PRIORITIZES STRING EXTRACTION over Date Object parsing to avoid timezone shifts.
+// Fixes "Day -1" for European timezones without causing "Day +1" for American afternoons.
 export const normalizeDate = (d: any): string => {
   if (!d) return '';
   
-  // 1. If it's already a Date object (Google Apps Script sometimes returns this)
+  // 1. Handle Date objects directly
   if (d instanceof Date) {
-     const year = d.getFullYear();
-     const month = String(d.getMonth() + 1).padStart(2, '0');
-     const day = String(d.getDate()).padStart(2, '0');
-     return `${year}-${month}-${day}`;
+     return formatDateObject(d);
   }
 
   const s = String(d).trim();
   
-  // 2. Regex Extraction: Look for YYYY-MM-DD anywhere in the string.
-  // This is the safest way to handle ISO strings like "2023-10-25T23:00:00.000Z"
-  // We simply extract the date part literal, ignoring the time/zone completely.
-  const isoMatch = s.match(/(\d{4})[\-\/](\d{2})[\-\/](\d{2})/);
-  if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  // 2. Strict YYYY-MM-DD (Exact match, no time)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return s;
   }
 
-  // 3. Regex Extraction: Look for DD/MM/YYYY or DD-MM-YYYY
-  // Common in international formats
+  // 3. ISO String Analysis
+  if (s.includes('T') || s.includes(':')) {
+      const date = new Date(s);
+      if (!isNaN(date.getTime())) {
+          return formatDateObject(date);
+      }
+  }
+
+  // 4. Legacy/International Formats (DD/MM/YYYY)
   const dmyMatch = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})/);
   if (dmyMatch) {
     let p1 = parseInt(dmyMatch[1], 10);
     let p2 = parseInt(dmyMatch[2], 10);
     const year = dmyMatch[3];
     
-    // Simple heuristic: If p1 > 12, it must be Day. If p2 > 12, it must be Day.
-    // If both <= 12, we default to DD-MM (international standard) unless logic suggests otherwise.
+    // Heuristic: swap if P1 looks like month (<=12) and P2 looks like day (>12)
     let day = p1;
     let month = p2;
-    
-    // Swap if p1 looks like month (<=12) and p2 looks like day (>12) - likely US format MM/DD/YYYY
     if (p1 <= 12 && p2 > 12) {
         month = p1;
         day = p2;
     } 
-    
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
-  // 4. Last Resort: Date Parsing (prone to timezone shifts, but better than nothing)
-  const date = new Date(s);
-  if (!isNaN(date.getTime())) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-  
   return s.substring(0, 10);
 };
 
+// Helper: Formats a date object to YYYY-MM-DD
+// Includes specific logic to fix the "Day -1" bug caused by Timezone shifts.
+const formatDateObject = (date: Date): string => {
+    const hours = date.getUTCHours();
+    
+    // "Day -1" Detection:
+    // If the time is 22:00 or 23:00 UTC, it is extremely likely to be "Midnight" 
+    // in a European/African timezone (UTC+1 or UTC+2) that was shifted back.
+    // We round these UP to the next day.
+    // We DO NOT round up 21:00 or earlier, to protect "Afternoon" tasks in the Americas.
+    if (hours >= 22) {
+        date.setUTCDate(date.getUTCDate() + 1);
+    }
+
+    // Now extract the UTC date components. 
+    // Note: For American timezones (e.g. EST midnight = 05:00 UTC), this correctly 
+    // extracts the same day because 05:00 is still the same calendar day in UTC.
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+};
+
 // Helper: Ensure a date string snaps to the Monday of that week
-// Uses Local Time construction to prevent UTC-offset shifts
 export const snapToMonday = (dateStr: string): string => {
   if (!dateStr) return '';
   
-  // Parse manually to avoid "new Date('YYYY-MM-DD')" being treated as UTC
-  const parts = dateStr.split('-').map(Number);
-  if (parts.length < 3) return dateStr;
+  const cleanDate = normalizeDate(dateStr);
+  const parts = cleanDate.split('-').map(Number);
+  if (parts.length < 3) return cleanDate;
   
   const [y, m, d] = parts;
-  // Construct Date in Local Time (Month is 0-indexed)
+  // Construct Date in Local Time
   const date = new Date(y, m - 1, d);
   
-  if (isNaN(date.getTime())) return dateStr;
+  if (isNaN(date.getTime())) return cleanDate;
   
   const day = date.getDay(); // 0 (Sun) to 6 (Sat)
   const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
   
-  // Set date modifies the object in place and handles month/year rollovers
   date.setDate(diff);
   
   const yearStr = date.getFullYear();
@@ -112,7 +122,7 @@ const safeStr = (s: any): string => {
   return s ? String(s).trim() : '';
 };
 
-// Deduplicate array by ID, keeping the LAST occurrence (Latest update wins)
+// Deduplicate array by ID, keeping the LAST occurrence
 const dedupeById = <T>(items: T[], idKey: keyof T): T[] => {
   const map = new Map<any, T>();
   items.forEach(item => {
@@ -123,8 +133,7 @@ const dedupeById = <T>(items: T[], idKey: keyof T): T[] => {
 
 export const fetchAppData = async (): Promise<AppData> => {
   if (!API_URL) {
-    console.warn("Using Mock Data (Configure API_URL in services/storage.ts to go live)");
-    // Simulate network delay
+    console.warn("Using Mock Data (Configure API_URL in services/storage.ts)");
     await new Promise(resolve => setTimeout(resolve, 800));
     return {
       users: INITIAL_USERS,
@@ -136,7 +145,6 @@ export const fetchAppData = async (): Promise<AppData> => {
   }
 
   try {
-    // Append timestamp to prevent browser caching
     const response = await fetch(`${API_URL}?t=${Date.now()}`);
     if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -144,13 +152,22 @@ export const fetchAppData = async (): Promise<AppData> => {
     const data = await response.json();
 
     // Map and normalize data
-    const rawTasks = (data.tasks || []).map((t: any) => {
+    const rawTasks = (data.tasks || []).map((t: any, index: number) => {
         // Handle Capitalized Headers often returned by Google Sheets
         const weekDateRaw = t.weekOfDate || t.WeekOfDate;
         const scheduledDateRaw = t.scheduledDate || t.ScheduledDate;
         
-        const rawWeekDate = normalizeDate(weekDateRaw);
-        const rawScheduledDate = normalizeDate(scheduledDateRaw);
+        const normalizedScheduled = normalizeDate(scheduledDateRaw);
+
+        // DEBUGGING: Help identify date shifts
+        // Only log for the first few items to avoid console spam
+        if (index < 3 && scheduledDateRaw && String(scheduledDateRaw).includes('T')) {
+             console.groupCollapsed(`🔍 Date Debug (Task ${index})`);
+             console.log("Raw from Sheet:", scheduledDateRaw);
+             console.log("UTC Hour:", new Date(scheduledDateRaw).getUTCHours());
+             console.log("Normalized:", normalizedScheduled);
+             console.groupEnd();
+        }
 
         return {
             ...t,
@@ -160,15 +177,13 @@ export const fetchAppData = async (): Promise<AppData> => {
             estimatedPomodoros: Number(t.estimatedPomodoros || t.EstimatedPomodoros || 0),
             actualPomodoros: Number(t.actualPomodoros || t.ActualPomodoros || 0),
             status: safeStr(t.status || t.Status || 'To Do'),
-            weekOfDate: snapToMonday(rawWeekDate), // Ensure tasks are also snapped to Monday
-            scheduledDate: rawScheduledDate,
+            weekOfDate: snapToMonday(weekDateRaw), 
+            scheduledDate: normalizedScheduled,
         };
     });
 
     const rawWeeklyGoals = (data.weeklyGoals || []).map((g: any) => {
-      // Normalize the input date
-      const rawDate = normalizeDate(g.weekOfDate || g.WeekOfDate);
-      // Ensure it is mapped to the Monday of that week for consistent grouping
+      const rawDate = g.weekOfDate || g.WeekOfDate;
       const weekStart = snapToMonday(rawDate);
 
       return {
@@ -181,7 +196,7 @@ export const fetchAppData = async (): Promise<AppData> => {
         dependency: g.dependency || g.Dependency || '',
         status: safeStr(g.status || g.Status || 'Not Started'),
         retroText: g.retroText || g.RetroText || '',
-        weekOfDate: weekStart, // Use the snapped date
+        weekOfDate: weekStart,
       };
     });
 
@@ -200,7 +215,6 @@ export const fetchAppData = async (): Promise<AppData> => {
         avatar: u.avatar || u.Avatar
     }));
     
-    // Fallback to initial users if sheet is empty (prevents lockout)
     const finalUsers = rawUsers.length > 0 ? dedupeById(rawUsers, 'userId') : INITIAL_USERS;
 
     return {
@@ -212,7 +226,6 @@ export const fetchAppData = async (): Promise<AppData> => {
     };
   } catch (error) {
     console.error("Failed to fetch data:", error);
-    // Return empty state on failure rather than mock data to avoid confusion
     return { users: INITIAL_USERS, checkouts: [], tasks: [], weeklyGoals: [], interactions: [] };
   }
 };
@@ -223,7 +236,7 @@ export const syncItem = async (type: 'Users' | 'Checkouts' | 'Tasks' | 'Interact
   try {
     await fetch(API_URL, {
       method: 'POST',
-      mode: 'no-cors', // Google Apps Script simple POST requirement
+      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type, payload })
     });
