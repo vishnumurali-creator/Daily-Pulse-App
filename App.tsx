@@ -24,7 +24,12 @@ import {
   X,
   LogOut,
   ChevronRight,
-  RotateCcw
+  RotateCcw,
+  Share2,
+  Check,
+  Copy,
+  AlertTriangle,
+  Link as LinkIcon
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -44,6 +49,7 @@ const App: React.FC = () => {
   
   const [activeTab, setActiveTab] = useState<TabView>(TabView.CHECKOUT);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Centralized Data Fetcher
   const refreshData = useCallback(async (isBackground = false) => {
@@ -374,6 +380,15 @@ const App: React.FC = () => {
           
           {/* User Profile & Logout */}
           <div className="flex items-center gap-3">
+             <button
+                onClick={() => setIsShareModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600"
+                title="Share Tool Link"
+             >
+                <Share2 className="w-3.5 h-3.5" />
+                Share
+             </button>
+
              <button 
                onClick={() => refreshData(false)} 
                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all"
@@ -402,6 +417,11 @@ const App: React.FC = () => {
       <main className="max-w-4xl mx-auto px-4 py-8">
         {renderContent()}
       </main>
+
+      {/* Share Modal */}
+      {isShareModalOpen && (
+        <ShareModal onClose={() => setIsShareModalOpen(false)} />
+      )}
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 md:sticky md:bottom-auto md:top-0">
@@ -481,6 +501,58 @@ const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.Re
     <span className={`text-[10px] md:text-sm font-medium ${active ? 'font-bold' : ''}`}>{label}</span>
   </button>
 );
+
+// Share Modal Component
+const ShareModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  // Strip query parameters to provide a clean URL
+  const url = window.location.origin + window.location.pathname;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+       <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+             <div className="flex items-center gap-2">
+                <LinkIcon className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-lg text-slate-800">Share Team Link</h3>
+             </div>
+             <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
+          </div>
+          <div className="p-6">
+             <p className="text-sm text-slate-600 mb-4">
+                Share this URL with your team to invite them to the Daily Pulse.
+             </p>
+             <div className="flex gap-2">
+                <input 
+                  readOnly 
+                  value={url} 
+                  className="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 select-all font-mono"
+                />
+                <button 
+                   onClick={handleCopy}
+                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition-colors flex items-center gap-2 min-w-[90px] justify-center"
+                >
+                   {copied ? <Check className="w-4 h-4"/> : <Copy className="w-4 h-4"/>}
+                   {copied ? 'Copied' : 'Copy'}
+                </button>
+             </div>
+             <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg flex gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                <p className="text-xs text-amber-700 leading-relaxed">
+                   <strong>Important:</strong> Ensure this is your public Production URL (e.g., ending in <code>.vercel.app</code> or your custom domain). Private preview links may redirect users to a Vercel login page.
+                </p>
+             </div>
+          </div>
+       </div>
+    </div>
+  );
+};
 
 // Create User Modal Component
 const CreateUserModal: React.FC<{ onClose: () => void; onCreate: (name: string, role: UserRole) => void }> = ({ onClose, onCreate }) => {
