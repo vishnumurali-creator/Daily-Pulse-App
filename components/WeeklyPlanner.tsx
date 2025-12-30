@@ -12,8 +12,7 @@ import {
   Flag, 
   ChevronLeft, 
   ChevronRight,
-  RotateCcw,
-  ArrowRight
+  RotateCcw
 } from 'lucide-react';
 
 interface PlannerProps {
