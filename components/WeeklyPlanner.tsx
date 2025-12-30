@@ -27,7 +27,7 @@ interface PlannerProps {
 }
 
 // ==========================================
-// 📅 ROBUST DATE UTILS (Local Time)
+// 📅 DATE UTILS
 // ==========================================
 
 const toLocalISO = (d: Date) => {
@@ -41,17 +41,19 @@ const getWeekRange = (mondayStr: string) => {
   if (!mondayStr) return { start: '', end: '', label: '' };
   
   const parts = mondayStr.split('-').map(Number);
+  // Construct date in local time
   const start = new Date(parts[0], parts[1] - 1, parts[2]);
   
   const end = new Date(start);
   end.setDate(end.getDate() + 6); // Sunday
   
   const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const year = start.getFullYear();
   
   return {
     start: toLocalISO(start),
     end: toLocalISO(end),
-    label: `${fmt(start)} - ${fmt(end)}`
+    label: `${fmt(start)} - ${fmt(end)}, ${year}`
   };
 };
 
@@ -82,18 +84,20 @@ const Planner: React.FC<PlannerProps> = ({
   onAddWeeklyGoal,
   onUpdateWeeklyGoal
 }) => {
+  // View State
   const [viewMode, setViewMode] = useState<'today' | 'week'>('today');
   
-  // Anchor date (YYYY-MM-DD)
+  // "Selected Date" acts as our cursor. Defaults to today.
   const [selectedDate, setSelectedDate] = useState<string>(toLocalISO(new Date()));
 
-  // Derived: The Monday of the week containing selectedDate
+  // ⭐️ CRITICAL LOGIC: 
+  // Regardless of what 'selectedDate' is (Tuesday, Sunday, etc.),
+  // 'currentWeekStart' is always the Monday of that week.
+  // This is used for BOTH fetching matching goals AND creating new ones.
   const currentWeekStart = useMemo(() => snapToMonday(selectedDate), [selectedDate]);
-  
-  // Derived: Date Range Label
   const weekRange = useMemo(() => getWeekRange(currentWeekStart), [currentWeekStart]);
 
-  // Form States
+  // Form State
   const [newTaskDesc, setNewTaskDesc] = useState('');
   const [newEst, setNewEst] = useState<number>(2);
 
@@ -102,13 +106,14 @@ const Planner: React.FC<PlannerProps> = ({
   const [newGoalPriority, setNewGoalPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const [newGoalDependency, setNewGoalDependency] = useState('');
 
-  // Clear inputs on date switch
+  // Reset task inputs when date changes (optional UX choice)
   useEffect(() => {
     setNewTaskDesc('');
     setNewEst(2);
   }, [selectedDate]);
 
-  // --- Navigation ---
+  // --- Navigation Helpers ---
+
   const handleDateChange = (daysToAdd: number) => {
     const parts = selectedDate.split('-').map(Number);
     const date = new Date(parts[0], parts[1] - 1, parts[2]);
@@ -122,30 +127,35 @@ const Planner: React.FC<PlannerProps> = ({
 
   const isToday = selectedDate === toLocalISO(new Date());
 
-  // --- Filtering ---
+  // --- FILTERING LOGIC ---
 
-  // Tasks: Match scheduledDate strictly OR fallback to weekOfDate if unscheduled
+  // 1. Daily Tasks: Filter by explicit Scheduled Date OR Week fallback
   const myDailyTasks = tasks.filter(t => {
     if (t.userId !== currentUser.userId) return false;
+    // Strict day match if available
     if (t.scheduledDate && t.scheduledDate.length >= 10) {
       return t.scheduledDate === selectedDate;
     }
+    // Fallback: If no scheduled date, does it belong to this week?
     return t.weekOfDate === currentWeekStart;
   });
 
   const totalDailyPomos = myDailyTasks.reduce((acc, t) => acc + t.estimatedPomodoros, 0);
   const isOverworked = totalDailyPomos > 16;
 
-  // Goals: Strictly match the Week Start (Monday)
-  // Logic: The goal's weekOfDate (from backend) must equal our calculated Monday.
+  // 2. Weekly Goals: Filter by "Snapped Monday"
+  // Logic: Ensure both the goal's date and the current view are snapped to Monday before comparing.
   const myWeeklyGoals = weeklyGoals.filter(g => {
     if (g.userId !== currentUser.userId) return false;
-    // We normalize locally just in case backend data is raw or inconsistent
+    
+    // Safety: normalize the goal's week date from the backend to ensure it is a Monday
     const goalMonday = snapToMonday(g.weekOfDate);
+    
+    // Compare strictly
     return goalMonday === currentWeekStart;
   });
 
-  // --- Handlers ---
+  // --- ACTIONS ---
 
   const handleAddDailyTask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,8 +164,8 @@ const Planner: React.FC<PlannerProps> = ({
     onAddTask({
       userId: currentUser.userId,
       taskDescription: newTaskDesc,
-      weekOfDate: currentWeekStart,
-      scheduledDate: selectedDate,
+      weekOfDate: currentWeekStart, // Link to the week
+      scheduledDate: selectedDate,  // Link to the specific day
       estimatedPomodoros: newEst,
     });
     setNewTaskDesc('');
@@ -166,9 +176,11 @@ const Planner: React.FC<PlannerProps> = ({
     e.preventDefault();
     if (!newGoalTitle.trim()) return;
 
+    // ⭐️ LOGIC: When creating a goal, we ALWAYS force the date to be the Monday of the current view.
+    // Even if today is Tuesday, the goal is saved as "Monday, Dec XX".
     onAddWeeklyGoal({
       userId: currentUser.userId,
-      weekOfDate: currentWeekStart, // Always attaches to the Monday
+      weekOfDate: currentWeekStart, 
       title: newGoalTitle,
       definitionOfDone: newGoalDoD,
       priority: newGoalPriority,
@@ -195,7 +207,7 @@ const Planner: React.FC<PlannerProps> = ({
   return (
     <div className="max-w-2xl mx-auto pb-20 animate-fade-in">
       
-      {/* Header & View Toggle */}
+      {/* --- HEADER & TOGGLE --- */}
       <div className="mb-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-800">Planner</h2>
@@ -219,7 +231,7 @@ const Planner: React.FC<PlannerProps> = ({
           </div>
         </div>
 
-        {/* Date Navigator */}
+        {/* --- DATE NAVIGATOR --- */}
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
             <button onClick={handlePrev} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
                 <ChevronLeft className="w-5 h-5" />
@@ -229,20 +241,20 @@ const Planner: React.FC<PlannerProps> = ({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
                     {viewMode === 'today' ? 'Focusing On' : 'Week Of'}
                 </span>
-                <div className="flex flex-col items-center relative group cursor-pointer">
+                
+                <div className="relative group cursor-pointer text-center">
                     {viewMode === 'today' ? (
-                       <span className="font-bold text-slate-800 text-lg hover:text-indigo-600 transition-colors">
+                       <span className="font-bold text-slate-800 text-lg hover:text-indigo-600 transition-colors block">
                           {formatDateFriendly(selectedDate)}
                        </span>
                     ) : (
-                       <div className="flex flex-col items-center">
-                          <span className="font-bold text-slate-800 text-lg hover:text-indigo-600 transition-colors leading-tight">
-                            {weekRange.label}
-                          </span>
-                       </div>
+                       // Weekly View: Show Range explicitly
+                       <span className="font-bold text-slate-800 text-lg hover:text-indigo-600 transition-colors block leading-tight">
+                         {weekRange.label}
+                       </span>
                     )}
                     
-                    {/* Native Date Picker Overlay */}
+                    {/* Native Date Picker for Quick Jumping */}
                     <input 
                         type="date" 
                         value={selectedDate} 
@@ -365,7 +377,7 @@ const Planner: React.FC<PlannerProps> = ({
             <div className="absolute top-0 left-0 w-1 h-full bg-indigo-600"></div>
             <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
               <Flag className="w-4 h-4 text-indigo-600" />
-              <span>Set Goal for Week: <span className="text-indigo-600">{weekRange.label}</span></span>
+              <span>Set Goal for: <span className="text-indigo-600">{weekRange.label}</span></span>
             </h3>
             
             <form onSubmit={handleAddGoal} className="space-y-4">
@@ -422,7 +434,7 @@ const Planner: React.FC<PlannerProps> = ({
           <div className="space-y-4">
             {myWeeklyGoals.length === 0 && (
                 <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                    <p className="text-slate-500 text-sm">No goals set for this week.</p>
+                    <p className="text-slate-500 text-sm">No goals found for {weekRange.label}.</p>
                     <p className="text-xs text-slate-400 mt-1">Add a goal above to get started.</p>
                 </div>
             )}

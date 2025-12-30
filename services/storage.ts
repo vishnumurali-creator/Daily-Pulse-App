@@ -30,18 +30,7 @@ export interface AppData {
  * normalizeDate
  * 
  * Purpose: Extracts the "Business Date" (YYYY-MM-DD) from a potentially timezone-shifted source.
- * 
- * The Problem: Google Sheets stores dates as "Midnight Local Time". When exported to JSON,
- * they convert to UTC. 
- * - In Europe (UTC+1), Midnight becomes 23:00 Previous Day.
- * - In NY (UTC-5), Midnight becomes 05:00 Current Day.
- * 
- * The Fix ("Noon Pivot"): We add 12 hours to the timestamp before extracting the date.
- * - 23:00 Prev Day + 12h = 11:00 Current Day.
- * - 05:00 Current Day + 12h = 17:00 Current Day.
- * 
- * This safely lands us in the middle of the correct calendar day for any timezone 
- * between UTC-12 and UTC+12.
+ * Supports: ISO, Date objects, DD-MM-YYYY, DD/MM/YY
  */
 export const normalizeDate = (input: any): string => {
   if (!input) return '';
@@ -54,47 +43,46 @@ export const normalizeDate = (input: any): string => {
   const str = String(input).trim();
 
   // 2. Optimization: If it's already YYYY-MM-DD, trust it.
-  // This handles local creation or text-stored dates.
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
     return str;
   }
 
-  // 3. Handle ISO Strings or Google's "Date(123...)" format
-  // We try to parse it as a Date object.
-  let date: Date | null = null;
-
-  // Handle Google Script's specific "Date(milliseconds)" format
+  // 3. Handle Google Script's specific "Date(milliseconds)" format
   if (str.startsWith('Date(')) {
     const timestamp = parseInt(str.substring(5, str.length - 1));
     if (!isNaN(timestamp)) {
-      date = new Date(timestamp);
-    }
-  } else {
-    // Standard Parsing
-    const parsed = new Date(str);
-    if (!isNaN(parsed.getTime())) {
-      date = parsed;
+      return formatDateWithNoonPivot(new Date(timestamp));
     }
   }
 
-  if (date) {
-    return formatDateWithNoonPivot(date);
-  }
-
-  // 4. Fallback: DD/MM/YYYY or DD-MM-YYYY (Common in Sheets)
-  const dmy = str.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})/);
+  // 4. Handle DD/MM/YYYY or DD-MM-YYYY or DD-MM-YY
+  // Regex: 1-2 digits separator 1-2 digits separator 2-4 digits
+  const dmy = str.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{2,4})/);
   if (dmy) {
     const p1 = parseInt(dmy[1], 10);
     const p2 = parseInt(dmy[2], 10);
-    const y = dmy[3];
+    let y = parseInt(dmy[3], 10);
+
+    // Handle 2-digit year (assume 2000s)
+    if (y < 100) {
+      y += 2000;
+    }
+
     // Heuristic: If p1 > 12, it must be Day. If p2 > 12, it must be Day.
-    // Defaulting to International DD/MM/YYYY if ambiguous.
+    // Defaulting to International DD/MM/YYYY if ambiguous (e.g. 05/02).
     const day = (p1 > 12 || (p2 <= 12 && p1 <= 31)) ? p1 : p2;
     const month = (p1 > 12) ? p2 : p1;
+    
     return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
-  // 5. Last Resort: return first 10 chars (e.g. "2023-10-25 junk")
+  // 5. Try standard Date parsing (last resort)
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return formatDateWithNoonPivot(parsed);
+  }
+
+  // 6. Fallback: return first 10 chars
   return str.substring(0, 10);
 };
 
@@ -157,7 +145,18 @@ const safeNum = (n: any): number => {
 const dedupeById = <T>(items: T[], idKey: keyof T): T[] => {
   const map = new Map<any, T>();
   items.forEach(item => {
-    map.set(item[idKey], item);
+    // @ts-ignore
+    const id = item[idKey];
+    if (id) {
+        map.set(id, item);
+    } else {
+        // If ID is missing, generate a random one to prevent dropping data
+        // This is crucial for rows manually added to sheets without IDs
+        const randomId = Math.random().toString(36).substr(2, 9);
+        // @ts-ignore
+        item[idKey] = randomId;
+        map.set(randomId, item);
+    }
   });
   return Array.from(map.values());
 };
@@ -196,19 +195,25 @@ export const fetchAppData = async (): Promise<AppData> => {
     }));
 
     // 2. Map Weekly Goals
-    const rawGoals = (data.weeklyGoals || []).map((g: any) => ({
-      ...g,
-      goalId: safeStr(g.goalId || g.GoalId),
-      userId: safeStr(g.userId || g.UserId),
-      title: g.title || g.Title || 'Untitled Goal',
-      definitionOfDone: g.definitionOfDone || g.DefinitionOfDone || '',
-      priority: g.priority || g.Priority || 'Medium',
-      dependency: g.dependency || g.Dependency || '',
-      status: safeStr(g.status || g.Status || 'Not Started'),
-      retroText: g.retroText || g.RetroText || '',
-      // Apply Date Normalization
-      weekOfDate: snapToMonday(g.weekOfDate || g.WeekOfDate),
-    }));
+    const rawGoals = (data.weeklyGoals || []).map((g: any, index: number) => {
+        // Fallback ID generation if missing in Sheet
+        const gid = safeStr(g.goalId || g.GoalId);
+        
+        return {
+            ...g,
+            goalId: gid || `gen-g-${index}-${Date.now()}`,
+            userId: safeStr(g.userId || g.UserId),
+            title: g.title || g.Title || 'Untitled Goal',
+            definitionOfDone: g.definitionOfDone || g.DefinitionOfDone || '',
+            priority: g.priority || g.Priority || 'Medium',
+            dependency: g.dependency || g.Dependency || '',
+            status: safeStr(g.status || g.Status || 'Not Started'),
+            retroText: g.retroText || g.RetroText || '',
+            // Apply Date Normalization
+            // Check multiple casings and space variations
+            weekOfDate: snapToMonday(g.weekOfDate || g.WeekOfDate || g['Week Of Date']),
+        };
+    });
 
     // 3. Map Checkouts
     const rawCheckouts = (data.checkouts || []).map((c: any) => ({
