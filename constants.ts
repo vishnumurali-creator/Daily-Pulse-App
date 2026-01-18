@@ -1,3 +1,4 @@
+
 import { User, UserRole, DailyCheckout, Task, Interaction, WeeklyGoal } from './types';
 
 // Mock Users
@@ -17,6 +18,10 @@ const toLocalISO = (d: Date) => {
 
 const today = new Date();
 const todayStr = toLocalISO(today);
+
+const nextWeek = new Date(today);
+nextWeek.setDate(nextWeek.getDate() + 7);
+const nextWeekStr = toLocalISO(nextWeek);
 
 const yesterday = new Date(today);
 yesterday.setDate(yesterday.getDate() - 1);
@@ -100,19 +105,25 @@ export const INITIAL_WEEKLY_GOALS: WeeklyGoal[] = [
     goalId: 'g1',
     userId: 'u2',
     weekOfDate: '2023-10-23',
+    startDate: todayStr,
+    endDate: nextWeekStr,
     title: 'Ship the MVP Authentication',
     definitionOfDone: 'Users can login, logout, and session persists.',
+    steps: '- Setup Firebase Auth\n- Create Login UI Component\n- Connect State Management\n- Add Error Handling',
     priority: 'High',
     dependency: 'Backend API readiness',
-    status: 'In Progress',
+    status: 'Partially Completed',
     retroText: ''
   },
   {
     goalId: 'g2',
     userId: 'u2',
     weekOfDate: '2023-10-23',
+    startDate: todayStr,
+    endDate: nextWeekStr,
     title: 'Clean up technical debt',
     definitionOfDone: 'Remove all unused imports and console logs.',
+    steps: '- Run linter\n- Check all useEffect dependencies\n- Remove console.log statements',
     priority: 'Low',
     status: 'Not Started',
   }

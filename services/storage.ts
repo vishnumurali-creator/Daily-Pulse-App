@@ -1,3 +1,4 @@
+
 import { DailyCheckout, Task, Interaction, User, WeeklyGoal, UserRole } from '../types';
 import { INITIAL_USERS, INITIAL_CHECKOUTS, INITIAL_TASKS, INITIAL_INTERACTIONS, INITIAL_WEEKLY_GOALS } from '../constants';
 
@@ -12,7 +13,7 @@ To make this app live with real shared data:
    - Add Header Rows (Row 1) for each sheet matching the interface keys in types.ts.
 */
 
-const API_URL = "https://script.google.com/macros/s/AKfycbwlMoaW5noKmqa9rmDLN_hbf6wP0Ho027WXLenwRe3ytg-8S3DUzooKx52u2SHI1m86/exec"; // 🔴 PASTE YOUR GOOGLE SCRIPT URL HERE
+const API_URL = "https://script.google.com/macros/s/AKfycbwlMoaW5noKmqa9rmDLN_hbf6wP0Ho027WXLenwRe3ytg-8S3DUzooKx52u2SHI1m86/exec";
 
 export interface AppData {
   users: User[];
@@ -26,73 +27,16 @@ export interface AppData {
 // 📅 ROBUST DATE PARSING ENGINE
 // ==========================================
 
-/**
- * normalizeDate
- * 
- * Purpose: Extracts the "Business Date" (YYYY-MM-DD) from a potentially timezone-shifted source.
- * Supports: ISO, Date objects, DD-MM-YYYY, DD/MM/YY
- */
-export const normalizeDate = (input: any): string => {
-  if (!input) return '';
-
-  // 1. Handle Date objects
-  if (input instanceof Date) {
-    return formatDateWithNoonPivot(input);
-  }
-
-  const str = String(input).trim();
-
-  // 2. Optimization: If it's already YYYY-MM-DD, trust it.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-    return str;
-  }
-
-  // 3. Handle Google Script's specific "Date(milliseconds)" format
-  if (str.startsWith('Date(')) {
-    const timestamp = parseInt(str.substring(5, str.length - 1));
-    if (!isNaN(timestamp)) {
-      return formatDateWithNoonPivot(new Date(timestamp));
-    }
-  }
-
-  // 4. Handle DD/MM/YYYY or DD-MM-YYYY or DD-MM-YY
-  // Regex: 1-2 digits separator 1-2 digits separator 2-4 digits
-  const dmy = str.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{2,4})/);
-  if (dmy) {
-    const p1 = parseInt(dmy[1], 10);
-    const p2 = parseInt(dmy[2], 10);
-    let y = parseInt(dmy[3], 10);
-
-    // Handle 2-digit year (assume 2000s)
-    if (y < 100) {
-      y += 2000;
-    }
-
-    // Heuristic: If p1 > 12, it must be Day. If p2 > 12, it must be Day.
-    // Defaulting to International DD/MM/YYYY if ambiguous (e.g. 05/02).
-    const day = (p1 > 12 || (p2 <= 12 && p1 <= 31)) ? p1 : p2;
-    const month = (p1 > 12) ? p2 : p1;
-    
-    return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  }
-
-  // 5. Try standard Date parsing (last resort)
-  const parsed = new Date(str);
-  if (!isNaN(parsed.getTime())) {
-    return formatDateWithNoonPivot(parsed);
-  }
-
-  // 6. Fallback: return first 10 chars
-  return str.substring(0, 10);
+const toLocalISOString = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 };
 
 const formatDateWithNoonPivot = (d: Date): string => {
-  // Clone to avoid mutating original
   const adjusted = new Date(d.getTime());
-  
-  // Pivot: Add 12 hours (43,200,000 ms)
-  // This pushes "Late Prev Day" and "Early Current Day" into "Middle Current Day"
-  adjusted.setTime(adjusted.getTime() + 43200000);
+  adjusted.setTime(adjusted.getTime() + 43200000); // +12 Hours
   
   const y = adjusted.getUTCFullYear();
   const m = String(adjusted.getUTCMonth() + 1).padStart(2, '0');
@@ -101,38 +45,109 @@ const formatDateWithNoonPivot = (d: Date): string => {
   return `${y}-${m}-${dStr}`;
 };
 
-/**
- * snapToMonday
- * Ensures a date string is backed up to the preceding Monday.
- */
+export const normalizeDate = (input: any): string => {
+  if (!input) return '';
+
+  if (input instanceof Date) {
+    return formatDateWithNoonPivot(input);
+  }
+
+  const str = String(input).trim();
+
+  if (str.includes('T') && str.length > 10) {
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return formatDateWithNoonPivot(parsed);
+    }
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+
+  const wordMonthMatch = str.match(/^(\d{1,2})[\s\-\/]+([a-zA-Z]{3,})[\s\-\/]+(\d{4})/);
+  if (wordMonthMatch) {
+    const day = parseInt(wordMonthMatch[1], 10);
+    const monthStr = wordMonthMatch[2].toLowerCase().substring(0, 3);
+    const year = parseInt(wordMonthMatch[3], 10);
+
+    const months: {[key: string]: number} = {
+      jan:0, feb:1, mar:2, apr:3, may:4, jun:5, 
+      jul:6, aug:7, sep:8, oct:9, nov:10, dec:11
+    };
+    
+    const month = months[monthStr];
+    if (month !== undefined) {
+      const d = new Date(year, month, day, 12, 0, 0);
+      return toLocalISOString(d);
+    }
+  }
+
+  if (str.startsWith('Date(')) {
+    const timestamp = parseInt(str.substring(5, str.length - 1));
+    if (!isNaN(timestamp)) {
+      return formatDateWithNoonPivot(new Date(timestamp));
+    }
+  }
+
+  const dmy = str.match(/^(\d{1,2})[\-\/\.](\d{1,2})[\-\/\.](\d{2,4})/);
+  if (dmy) {
+    const p1 = parseInt(dmy[1], 10);
+    const p2 = parseInt(dmy[2], 10);
+    let y = parseInt(dmy[3], 10);
+
+    if (y < 100) y += 2000;
+
+    let day, month;
+    if (p1 > 12) {
+      day = p1;
+      month = p2;
+    } else if (p2 > 12) {
+      day = p2;
+      month = p1;
+    } else {
+      day = p1;
+      month = p2;
+    }
+    
+    return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return formatDateWithNoonPivot(parsed);
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+      return str.substring(0, 10);
+  }
+
+  return '';
+};
+
 export const snapToMonday = (dateStr: string): string => {
-  if (!dateStr) return '';
-  
   const cleanStr = normalizeDate(dateStr);
+  if (!cleanStr) return '';
+  
   const parts = cleanStr.split('-').map(Number);
-  if (parts.length < 3) return cleanStr;
+  if (parts.length !== 3) return cleanStr;
   
   const [y, m, d] = parts;
-  // Create date in Local time to interpret "Day of Week" correctly
-  const date = new Date(y, m - 1, d); 
+  const utcDate = new Date(Date.UTC(y, m - 1, d));
+  const dayOfWeek = utcDate.getUTCDay();
+  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
   
-  if (isNaN(date.getTime())) return cleanStr;
+  utcDate.setUTCDate(utcDate.getUTCDate() + diff);
   
-  const dayOfWeek = date.getDay(); // 0 (Sun) - 6 (Sat)
-  const dist = date.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-  
-  date.setDate(dist);
-  
-  // Format back manually
-  const newY = date.getFullYear();
-  const newM = String(date.getMonth() + 1).padStart(2, '0');
-  const newD = String(date.getDate()).padStart(2, '0');
+  const newY = utcDate.getUTCFullYear();
+  const newM = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+  const newD = String(utcDate.getUTCDate()).padStart(2, '0');
   
   return `${newY}-${newM}-${newD}`;
 };
 
 // ==========================================
-// 🛠️ DATA FETCHING & MAPPING
+// 🛠️ DATA FETCHING
 // ==========================================
 
 const safeStr = (s: any): string => s ? String(s).trim() : '';
@@ -141,7 +156,6 @@ const safeNum = (n: any): number => {
   return isNaN(parsed) ? 0 : parsed;
 };
 
-// Deduplicate array by ID, keeping the LAST occurrence
 const dedupeById = <T>(items: T[], idKey: keyof T): T[] => {
   const map = new Map<any, T>();
   items.forEach(item => {
@@ -150,8 +164,6 @@ const dedupeById = <T>(items: T[], idKey: keyof T): T[] => {
     if (id) {
         map.set(id, item);
     } else {
-        // If ID is missing, generate a random one to prevent dropping data
-        // This is crucial for rows manually added to sheets without IDs
         const randomId = Math.random().toString(36).substr(2, 9);
         // @ts-ignore
         item[idKey] = randomId;
@@ -163,7 +175,7 @@ const dedupeById = <T>(items: T[], idKey: keyof T): T[] => {
 
 export const fetchAppData = async (): Promise<AppData> => {
   if (!API_URL) {
-    console.warn("Using Mock Data (Configure API_URL in services/storage.ts)");
+    console.warn("Using Mock Data");
     await new Promise(resolve => setTimeout(resolve, 800));
     return {
       users: INITIAL_USERS,
@@ -180,7 +192,6 @@ export const fetchAppData = async (): Promise<AppData> => {
     
     const data = await response.json();
 
-    // 1. Map Tasks
     const rawTasks = (data.tasks || []).map((t: any) => ({
       ...t,
       taskId: safeStr(t.taskId || t.TaskId),
@@ -189,15 +200,26 @@ export const fetchAppData = async (): Promise<AppData> => {
       estimatedPomodoros: safeNum(t.estimatedPomodoros || t.EstimatedPomodoros),
       actualPomodoros: safeNum(t.actualPomodoros || t.ActualPomodoros),
       status: safeStr(t.status || t.Status || 'To Do'),
-      // Apply Date Normalization
       weekOfDate: snapToMonday(t.weekOfDate || t.WeekOfDate),
       scheduledDate: normalizeDate(t.scheduledDate || t.ScheduledDate),
     }));
 
-    // 2. Map Weekly Goals
     const rawGoals = (data.weeklyGoals || []).map((g: any, index: number) => {
-        // Fallback ID generation if missing in Sheet
         const gid = safeStr(g.goalId || g.GoalId);
+        
+        // 1. Get raw values for legacy field
+        const rawWeekDate = g.weekOfDate || g.WeekOfDate || g['Week Of Date'] || g['Week of Date'];
+        
+        // 2. Intelligent Fetch for Start/End Date
+        // Fallback: If 'startDate' column is empty, use 'weekOfDate' column value.
+        // This ensures that even if the new columns fail to save, we get the date from the legacy column.
+        const sDateRaw = g.startDate || g.StartDate || g.startdate || rawWeekDate; 
+        
+        // Fallback: If 'endDate' is empty, default to 'startDate'
+        const eDateRaw = g.endDate || g.EndDate || g.enddate || sDateRaw;
+
+        const sDate = normalizeDate(sDateRaw);
+        const eDate = normalizeDate(eDateRaw);
         
         return {
             ...g,
@@ -205,17 +227,21 @@ export const fetchAppData = async (): Promise<AppData> => {
             userId: safeStr(g.userId || g.UserId),
             title: g.title || g.Title || 'Untitled Goal',
             definitionOfDone: g.definitionOfDone || g.DefinitionOfDone || '',
+            steps: g.steps || g.Steps || '', // Map Steps column
             priority: g.priority || g.Priority || 'Medium',
             dependency: g.dependency || g.Dependency || '',
             status: safeStr(g.status || g.Status || 'Not Started'),
             retroText: g.retroText || g.RetroText || '',
-            // Apply Date Normalization
-            // Check multiple casings and space variations
-            weekOfDate: snapToMonday(g.weekOfDate || g.WeekOfDate || g['Week Of Date']),
+            
+            // Legacy support
+            weekOfDate: snapToMonday(sDate || rawWeekDate), 
+            
+            // New Fields
+            startDate: sDate,
+            endDate: eDate
         };
     });
 
-    // 3. Map Checkouts
     const rawCheckouts = (data.checkouts || []).map((c: any) => ({
       ...c,
       checkoutId: safeStr(c.checkoutId || c.CheckoutId),
@@ -224,13 +250,10 @@ export const fetchAppData = async (): Promise<AppData> => {
       winText: c.winText || c.WinText || '',
       blockerText: c.blockerText || c.BlockerText || '',
       tomorrowGoalText: c.tomorrowGoalText || c.TomorrowGoalText || '',
-      // Apply Date Normalization
       date: normalizeDate(c.date || c.Date),
-      // Timestamps are numbers, keep them as is
       timestamp: safeNum(c.timestamp || c.Timestamp),
     }));
 
-    // 4. Map Interactions
     const rawInteractions = (data.interactions || []).map((i: any) => ({
         ...i,
         interactionId: safeStr(i.interactionId || i.InteractionId),
@@ -241,7 +264,6 @@ export const fetchAppData = async (): Promise<AppData> => {
         timestamp: safeNum(i.timestamp || i.Timestamp),
     }));
 
-    // 5. Map Users
     const rawUsers: User[] = (data.users || []).map((u: any) => ({
         userId: safeStr(u.userId || u.UserId),
         name: u.name || u.Name,
@@ -259,7 +281,6 @@ export const fetchAppData = async (): Promise<AppData> => {
 
   } catch (error) {
     console.error("Failed to fetch data:", error);
-    // Return empty structures on failure, not initial mock data, to avoid confusion
     return { users: INITIAL_USERS, checkouts: [], tasks: [], weeklyGoals: [], interactions: [] };
   }
 };

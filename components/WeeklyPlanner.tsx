@@ -38,9 +38,13 @@ const toLocalISO = (d: Date) => {
 };
 
 const getWeekRange = (mondayStr: string) => {
-  if (!mondayStr) return { start: '', end: '', label: '' };
+  if (!mondayStr) return { start: '', end: '', label: 'Invalid Date' };
   
   const parts = mondayStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) {
+      return { start: '', end: '', label: 'Invalid Date' };
+  }
+
   // Construct date in local time
   const start = new Date(parts[0], parts[1] - 1, parts[2]);
   
@@ -48,18 +52,27 @@ const getWeekRange = (mondayStr: string) => {
   end.setDate(end.getDate() + 6); // Sunday
   
   const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const year = start.getFullYear();
   
+  const startYear = start.getFullYear();
+  const endYear = end.getFullYear();
+  
+  // Handle cross-year labels (e.g. Dec 29, 2025 - Jan 4, 2026)
+  const label = startYear === endYear 
+    ? `${fmt(start)} - ${fmt(end)}, ${startYear}`
+    : `${fmt(start)}, ${startYear} - ${fmt(end)}, ${endYear}`;
+
   return {
     start: toLocalISO(start),
     end: toLocalISO(end),
-    label: `${fmt(start)} - ${fmt(end)}, ${year}`
+    label
   };
 };
 
 const formatDateFriendly = (dateStr: string) => {
   if (!dateStr) return '';
   const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return dateStr;
+
   const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
   if (isNaN(dateObj.getTime())) return dateStr;
   

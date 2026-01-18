@@ -1,3 +1,4 @@
+
 export enum UserRole {
   MANAGER = 'Manager',
   EMPLOYEE = 'Employee'
@@ -35,12 +36,15 @@ export interface Task {
 export interface WeeklyGoal {
   goalId: string;
   userId: string;
-  weekOfDate: string;
+  weekOfDate: string; // Keeps legacy support
+  startDate?: string; // New: YYYY-MM-DD
+  endDate?: string;   // New: YYYY-MM-DD
   title: string;
   definitionOfDone: string;
+  steps?: string; // New: Detailed steps to achieve the goal
   priority: 'High' | 'Medium' | 'Low';
   dependency?: string;
-  status: 'Not Started' | 'In Progress' | 'Completed';
+  status: 'Not Started' | 'In Progress' | 'Partially Completed' | 'Completed';
   retroText?: string;
 }
 
@@ -57,5 +61,6 @@ export enum TabView {
   CHECKOUT = 'Checkout',
   FEED = 'Team Feed',
   DASHBOARD = 'Dashboard',
-  PLANNER = 'Planner'
+  PLANNER = 'Planner',
+  GOALS = 'Weekly Goals'
 }
