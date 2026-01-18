@@ -192,15 +192,15 @@ export const fetchAppData = async (): Promise<AppData> => {
     
     const data = await response.json();
     
-    // DEBUG: Log the keys received to help diagnosis if it fails again
-    // console.log("Received Data Keys:", Object.keys(data));
-
-    // Support both camelCase (JSON standard) and PascalCase (Google Sheet Tab Names)
-    const taskList = data.tasks || data.Tasks || [];
-    const goalList = data.weeklyGoals || data.WeeklyGoals || [];
-    const checkoutList = data.checkouts || data.Checkouts || [];
-    const interactionList = data.interactions || data.Interactions || [];
-    const userList = data.users || data.Users || [];
+    // Support JSON standard, PascalCase (Sheet Names), and Spaced Names (User Error)
+    const taskList = data.tasks || data.Tasks || data['Tasks'] || [];
+    
+    // 🔥 ROBUST CHECK: Look for 'WeeklyGoals', 'weeklyGoals', or 'Weekly Goals'
+    const goalList = data.weeklyGoals || data.WeeklyGoals || data['Weekly Goals'] || [];
+    
+    const checkoutList = data.checkouts || data.Checkouts || data['Checkouts'] || [];
+    const interactionList = data.interactions || data.Interactions || data['Interactions'] || [];
+    const userList = data.users || data.Users || data['Users'] || [];
 
     const rawTasks = taskList.map((t: any) => ({
       ...t,
@@ -221,11 +221,7 @@ export const fetchAppData = async (): Promise<AppData> => {
         const rawWeekDate = g.weekOfDate || g.WeekOfDate || g['Week Of Date'] || g['Week of Date'];
         
         // 2. Intelligent Fetch for Start/End Date
-        // Fallback: If 'startDate' column is empty, use 'weekOfDate' column value.
-        // This ensures that even if the new columns fail to save, we get the date from the legacy column.
         const sDateRaw = g.startDate || g.StartDate || g.startdate || rawWeekDate; 
-        
-        // Fallback: If 'endDate' is empty, default to 'startDate'
         const eDateRaw = g.endDate || g.EndDate || g.enddate || sDateRaw;
 
         const sDate = normalizeDate(sDateRaw);
@@ -298,8 +294,6 @@ export const fetchAppData = async (): Promise<AppData> => {
 export const syncItem = async (type: string, payload: any) => {
   if (!API_URL) return;
   
-  // Helper: Convert keys to PascalCase (e.g. userId -> UserId) 
-  // to match standard Google Sheet Column Headers
   const pascalPayload: any = {};
   Object.keys(payload).forEach(key => {
     const pascalKey = key.charAt(0).toUpperCase() + key.slice(1);

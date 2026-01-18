@@ -18,7 +18,8 @@ import {
   ListTodo,
   Users,
   Eye,
-  Database
+  Database,
+  Bug
 } from 'lucide-react';
 
 interface WeeklyGoalsProps {
@@ -44,7 +45,8 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
   const [dependency, setDependency] = useState('');
   
   const [showArchived, setShowArchived] = useState(false);
-  const [showAllTeam, setShowAllTeam] = useState(false); // New Debug/Team View Toggle
+  const [showAllTeam, setShowAllTeam] = useState(false);
+  const [showDebug, setShowDebug] = useState(false); // New Debug Toggle
 
   // Helper: Current Date for Defaults
   React.useEffect(() => {
@@ -57,24 +59,21 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
     setEndDate(nextWeek.toISOString().split('T')[0]);
   }, []);
 
-  // Filter Logic
-  const visibleGoals = useMemo(() => {
-    // If "Show All Team" is on, ignore the userId filter
-    const baseList = showAllTeam 
-      ? weeklyGoals 
-      : weeklyGoals.filter(g => g.userId === currentUser.userId);
+  // Filter Logic - Debugging Ready
+  // 1. User Filter
+  const goalsForUser = useMemo(() => {
+      // Case-insensitive user ID check for robustness
+      return weeklyGoals.filter(g => g.userId?.toLowerCase() === currentUser.userId?.toLowerCase());
+  }, [weeklyGoals, currentUser.userId]);
 
-    return baseList;
-  }, [weeklyGoals, currentUser.userId, showAllTeam]);
+  const visibleGoals = showAllTeam ? weeklyGoals : goalsForUser;
 
-  // CHANGED: Only strictly 'Completed' items are archived.
-  // 'Partially Completed', 'In Progress', etc. remain in the Active list.
+  // 2. Archived Filter
   const isArchived = (goal: WeeklyGoal) => {
     return goal.status === 'Completed';
   };
 
   const activeGoals = visibleGoals.filter(g => !isArchived(g)).sort((a, b) => {
-    // Sort by Priority first (High -> Low), then Date
     const pScore = (p: string) => (p === 'High' ? 3 : p === 'Medium' ? 2 : 1);
     const scoreDiff = pScore(b.priority) - pScore(a.priority);
     if (scoreDiff !== 0) return scoreDiff;
@@ -90,14 +89,13 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
     e.preventDefault();
     if (!title.trim()) return;
 
-    // Ensure we set weekOfDate for legacy backend support
     const derivedWeekOfDate = snapToMonday(startDate);
 
     onAddWeeklyGoal({
       userId: currentUser.userId,
       title,
       definitionOfDone: dod,
-      steps, // Add steps
+      steps,
       priority,
       dependency,
       startDate,
@@ -279,7 +277,7 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
              goal={goal} 
              getPriorityColor={getPriorityColor}
              onUpdate={onUpdateWeeklyGoal} 
-             readOnly={showAllTeam && goal.userId !== currentUser.userId} // Read only if viewing others
+             readOnly={showAllTeam && goal.userId !== currentUser.userId}
              showUserLabel={showAllTeam}
            />
         ))}
@@ -313,14 +311,46 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
          )}
       </div>
 
-      {/* Debug Info */}
-      <div className="mt-12 pt-4 border-t border-dashed border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+      {/* Debug Data Inspector */}
+      <div className="mt-12">
+          <button 
+            onClick={() => setShowDebug(!showDebug)}
+            className="flex items-center gap-2 text-[10px] text-slate-400 hover:text-red-500 transition-colors"
+          >
+            <Bug className="w-3 h-3" />
+            {showDebug ? 'Hide Data Inspector' : 'Show Data Inspector (Debug)'}
+          </button>
+          
+          {showDebug && (
+            <div className="mt-4 p-4 bg-slate-900 rounded-xl text-slate-300 font-mono text-xs overflow-x-auto border border-slate-700">
+               <h4 className="font-bold text-white mb-2 border-b border-slate-700 pb-2">Diagnostic Report</h4>
+               <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <span className="text-slate-500">My UserID:</span> <span className="text-green-400">{currentUser.userId}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Total Goals Fetched:</span> <span className="text-white">{weeklyGoals.length}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Goals Matching ID:</span> <span className="text-white">{goalsForUser.length}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Active Goals (Visible):</span> <span className="text-white">{activeGoals.length}</span>
+                  </div>
+               </div>
+               
+               <p className="text-slate-500 mb-1">Raw Data Sample (First 2 Items):</p>
+               <pre className="text-[10px] text-amber-200">
+                 {JSON.stringify(weeklyGoals.slice(0, 2), null, 2)}
+               </pre>
+            </div>
+          )}
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-dashed border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
          <div className="flex items-center gap-2">
             <Database className="w-3 h-3" />
-            <span>Total Rows Fetched: {weeklyGoals.length}</span>
-         </div>
-         <div>
-            Sync Status: Live
+            <span>Sync Status: Live</span>
          </div>
       </div>
 
