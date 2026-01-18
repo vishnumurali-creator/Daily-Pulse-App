@@ -15,7 +15,9 @@ import {
   Circle,
   Clock,
   PlayCircle,
-  ListTodo
+  ListTodo,
+  Users,
+  Eye
 } from 'lucide-react';
 
 interface WeeklyGoalsProps {
@@ -36,11 +38,12 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
   const [endDate, setEndDate] = useState('');
   const [title, setTitle] = useState('');
   const [dod, setDod] = useState('');
-  const [steps, setSteps] = useState(''); // New State
+  const [steps, setSteps] = useState(''); 
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const [dependency, setDependency] = useState('');
   
   const [showArchived, setShowArchived] = useState(false);
+  const [showAllTeam, setShowAllTeam] = useState(false); // New Debug/Team View Toggle
 
   // Helper: Current Date for Defaults
   React.useEffect(() => {
@@ -54,19 +57,24 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
   }, []);
 
   // Filter Logic
-  const myGoals = useMemo(() => {
-    return weeklyGoals.filter(g => g.userId === currentUser.userId);
-  }, [weeklyGoals, currentUser.userId]);
+  const visibleGoals = useMemo(() => {
+    // If "Show All Team" is on, ignore the userId filter
+    const baseList = showAllTeam 
+      ? weeklyGoals 
+      : weeklyGoals.filter(g => g.userId === currentUser.userId);
+
+    return baseList;
+  }, [weeklyGoals, currentUser.userId, showAllTeam]);
 
   const isArchived = (goal: WeeklyGoal) => {
     return goal.status === 'Completed' || goal.status === 'Partially Completed';
   };
 
-  const activeGoals = myGoals.filter(g => !isArchived(g)).sort((a, b) => {
+  const activeGoals = visibleGoals.filter(g => !isArchived(g)).sort((a, b) => {
     return (b.startDate || '').localeCompare(a.startDate || '');
   });
   
-  const archivedGoals = myGoals.filter(g => isArchived(g)).sort((a, b) => {
+  const archivedGoals = visibleGoals.filter(g => isArchived(g)).sort((a, b) => {
     return (b.startDate || '').localeCompare(a.startDate || '');
   });
 
@@ -110,127 +118,147 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
 
   return (
     <div className="max-w-3xl mx-auto pb-20 animate-fade-in">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-indigo-600 rounded-lg text-white">
-          <Flag className="w-6 h-6" />
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-600 rounded-lg text-white">
+            <Flag className="w-6 h-6" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800">Weekly Goals</h2>
         </div>
-        <h2 className="text-2xl font-bold text-slate-800">Weekly Goals</h2>
+        
+        {/* Toggle Team View */}
+        <button
+          onClick={() => setShowAllTeam(!showAllTeam)}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+            showAllTeam 
+              ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-500 ring-offset-1' 
+              : 'bg-white text-slate-500 border border-slate-200 hover:border-indigo-300'
+          }`}
+        >
+          {showAllTeam ? <Users className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          {showAllTeam ? 'Viewing All' : 'My Goals Only'}
+        </button>
       </div>
 
       {/* Input Form */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
-        <h3 className="font-bold text-slate-800 mb-5 text-sm uppercase tracking-wide text-indigo-600 flex items-center gap-2">
-           <ListTodo className="w-4 h-4" />
-           Plan New Goal
-        </h3>
-        <form onSubmit={handleAdd} className="space-y-5">
-            
-            {/* 1. Dates (Planning Period) */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Start Date</label>
-                <div className="relative">
-                    <Calendar className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                    <input 
-                      type="date" 
-                      value={startDate}
-                      onChange={e => setStartDate(e.target.value)}
-                      className="w-full pl-9 p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      required
-                    />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">End Date</label>
-                <div className="relative">
-                    <Calendar className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                    <input 
-                      type="date" 
-                      value={endDate}
-                      onChange={e => setEndDate(e.target.value)}
-                      className="w-full pl-9 p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      required
-                    />
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Core Goal Info */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2">
-                     <label className="block text-xs font-bold text-slate-500 mb-1">Goal Title</label>
-                     <input
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="e.g. Launch Marketing Campaign"
-                      required
-                     />
+      {!showAllTeam && (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+            <h3 className="font-bold text-slate-800 mb-5 text-sm uppercase tracking-wide text-indigo-600 flex items-center gap-2">
+            <ListTodo className="w-4 h-4" />
+            Plan New Goal
+            </h3>
+            <form onSubmit={handleAdd} className="space-y-5">
+                
+                {/* 1. Dates (Planning Period) */}
+                <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Start Date</label>
+                    <div className="relative">
+                        <Calendar className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                        <input 
+                        type="date" 
+                        value={startDate}
+                        onChange={e => setStartDate(e.target.value)}
+                        className="w-full pl-9 p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        required
+                        />
+                    </div>
                 </div>
                 <div>
-                   <label className="block text-xs font-bold text-slate-500 mb-1">Priority</label>
-                   <select 
-                     value={priority}
-                     onChange={(e) => setPriority(e.target.value as any)}
-                     className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                   >
-                     <option value="High">High</option>
-                     <option value="Medium">Medium</option>
-                     <option value="Low">Low</option>
-                   </select>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">End Date</label>
+                    <div className="relative">
+                        <Calendar className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                        <input 
+                        type="date" 
+                        value={endDate}
+                        onChange={e => setEndDate(e.target.value)}
+                        className="w-full pl-9 p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        required
+                        />
+                    </div>
                 </div>
-            </div>
+                </div>
 
-            {/* 3. Steps (Expanded Area) */}
-            <div>
-                 <label className="block text-xs font-bold text-slate-500 mb-1">Steps to Achieve</label>
-                 <textarea
-                  value={steps}
-                  onChange={(e) => setSteps(e.target.value)}
-                  className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[120px]"
-                  placeholder="- Break down the goal...&#10;- Add key milestones...&#10;- List subtasks..."
-                  rows={5}
-                 />
-                 <p className="text-[10px] text-slate-400 mt-1 text-right">Use dashes (-) for bullet points.</p>
-            </div>
+                {/* 2. Core Goal Info */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-slate-500 mb-1">Goal Title</label>
+                        <input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="e.g. Launch Marketing Campaign"
+                        required
+                        />
+                    </div>
+                    <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Priority</label>
+                    <select 
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value as any)}
+                        className="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                    </div>
+                </div>
 
-            {/* 4. Definition of Done */}
-            <div>
-                 <label className="block text-xs font-bold text-slate-500 mb-1">Definition of Done (Success Criteria)</label>
-                 <textarea
-                  value={dod}
-                  onChange={(e) => setDod(e.target.value)}
-                  className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="Specific criteria to mark this as complete..."
-                  rows={3}
-                  required
-                 />
-            </div>
+                {/* 3. Steps (Expanded Area) */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Steps to Achieve</label>
+                    <textarea
+                    value={steps}
+                    onChange={(e) => setSteps(e.target.value)}
+                    className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[120px]"
+                    placeholder="- Break down the goal...&#10;- Add key milestones...&#10;- List subtasks..."
+                    rows={5}
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1 text-right">Use dashes (-) for bullet points.</p>
+                </div>
 
-            {/* 5. Dependency */}
-            <div>
-               <label className="block text-xs font-bold text-slate-500 mb-1">Dependency (Optional)</label>
-               <input
-                value={dependency}
-                onChange={(e) => setDependency(e.target.value)}
-                className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="e.g. Waiting for API approval"
-               />
-            </div>
+                {/* 4. Definition of Done */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Definition of Done (Success Criteria)</label>
+                    <textarea
+                    value={dod}
+                    onChange={(e) => setDod(e.target.value)}
+                    className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="Specific criteria to mark this as complete..."
+                    rows={3}
+                    required
+                    />
+                </div>
 
-            <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center gap-2">
-                <Plus className="w-5 h-5" />
-                Add Goal
-            </button>
-        </form>
-      </div>
+                {/* 5. Dependency */}
+                <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Dependency (Optional)</label>
+                <input
+                    value={dependency}
+                    onChange={(e) => setDependency(e.target.value)}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="e.g. Waiting for API approval"
+                />
+                </div>
+
+                <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center gap-2">
+                    <Plus className="w-5 h-5" />
+                    Add Goal
+                </button>
+            </form>
+        </div>
+      )}
 
       {/* Active Goals */}
       <div className="space-y-6 mb-8">
-        <h3 className="font-bold text-slate-800 text-lg border-b border-slate-200 pb-2">Active Goals</h3>
+        <h3 className="font-bold text-slate-800 text-lg border-b border-slate-200 pb-2 flex justify-between">
+            <span>{showAllTeam ? 'All Active Goals' : 'Active Goals'}</span>
+            <span className="text-xs font-normal text-slate-500 self-end">My ID: {currentUser.userId}</span>
+        </h3>
         {activeGoals.length === 0 && (
           <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-500 text-sm">
-             No active goals. Start planning above!
+             {showAllTeam ? 'No active goals found in the entire sheet.' : 'No active goals. Start planning above!'}
           </div>
         )}
         {activeGoals.map(goal => (
@@ -239,6 +267,8 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
              goal={goal} 
              getPriorityColor={getPriorityColor}
              onUpdate={onUpdateWeeklyGoal} 
+             readOnly={showAllTeam && goal.userId !== currentUser.userId} // Read only if viewing others
+             showUserLabel={showAllTeam}
            />
         ))}
       </div>
@@ -263,6 +293,7 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
                    getPriorityColor={getPriorityColor} 
                    onUpdate={onUpdateWeeklyGoal}
                    readOnly
+                   showUserLabel={showAllTeam}
                  />
               ))}
               {archivedGoals.length === 0 && <p className="text-slate-400 text-sm italic pl-6">No archived goals yet.</p>}
@@ -279,7 +310,8 @@ const GoalCard: React.FC<{
   getPriorityColor: (p: string) => string; 
   onUpdate: (id: string, u: Partial<WeeklyGoal>) => void;
   readOnly?: boolean;
-}> = ({ goal, getPriorityColor, onUpdate, readOnly }) => {
+  showUserLabel?: boolean;
+}> = ({ goal, getPriorityColor, onUpdate, readOnly, showUserLabel }) => {
    
    const getStatusColor = (s: string) => {
       if (s === 'Completed') return 'text-green-600 bg-green-50 border-green-200';
@@ -295,7 +327,7 @@ const GoalCard: React.FC<{
    }, [goal.startDate, goal.endDate]);
 
    return (
-     <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all ${readOnly ? 'opacity-75 grayscale-[0.5]' : 'hover:shadow-md'}`}>
+     <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all ${readOnly ? 'opacity-80' : 'hover:shadow-md'}`}>
         <div className="p-5 border-b border-slate-100">
             {/* Header: Dates & Priority */}
             <div className="flex justify-between items-start mb-3">
@@ -305,6 +337,12 @@ const GoalCard: React.FC<{
                            <Calendar className="w-3 h-3" />
                            {dateDisplay}
                         </div>
+                    )}
+                    {/* Debug / Team Label */}
+                    {showUserLabel && (
+                         <div className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1 rounded">
+                             {goal.userId}
+                         </div>
                     )}
                  </div>
                  <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase tracking-wider ${getPriorityColor(goal.priority)}`}>
