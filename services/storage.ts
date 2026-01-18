@@ -191,8 +191,18 @@ export const fetchAppData = async (): Promise<AppData> => {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
     const data = await response.json();
+    
+    // DEBUG: Log the keys received to help diagnosis if it fails again
+    // console.log("Received Data Keys:", Object.keys(data));
 
-    const rawTasks = (data.tasks || []).map((t: any) => ({
+    // Support both camelCase (JSON standard) and PascalCase (Google Sheet Tab Names)
+    const taskList = data.tasks || data.Tasks || [];
+    const goalList = data.weeklyGoals || data.WeeklyGoals || [];
+    const checkoutList = data.checkouts || data.Checkouts || [];
+    const interactionList = data.interactions || data.Interactions || [];
+    const userList = data.users || data.Users || [];
+
+    const rawTasks = taskList.map((t: any) => ({
       ...t,
       taskId: safeStr(t.taskId || t.TaskId),
       userId: safeStr(t.userId || t.UserId),
@@ -204,7 +214,7 @@ export const fetchAppData = async (): Promise<AppData> => {
       scheduledDate: normalizeDate(t.scheduledDate || t.ScheduledDate),
     }));
 
-    const rawGoals = (data.weeklyGoals || []).map((g: any, index: number) => {
+    const rawGoals = goalList.map((g: any, index: number) => {
         const gid = safeStr(g.goalId || g.GoalId);
         
         // 1. Get raw values for legacy field
@@ -227,7 +237,7 @@ export const fetchAppData = async (): Promise<AppData> => {
             userId: safeStr(g.userId || g.UserId),
             title: g.title || g.Title || 'Untitled Goal',
             definitionOfDone: g.definitionOfDone || g.DefinitionOfDone || '',
-            steps: g.steps || g.Steps || '', // Map Steps column
+            steps: g.steps || g.Steps || '', 
             priority: g.priority || g.Priority || 'Medium',
             dependency: g.dependency || g.Dependency || '',
             status: safeStr(g.status || g.Status || 'Not Started'),
@@ -242,7 +252,7 @@ export const fetchAppData = async (): Promise<AppData> => {
         };
     });
 
-    const rawCheckouts = (data.checkouts || []).map((c: any) => ({
+    const rawCheckouts = checkoutList.map((c: any) => ({
       ...c,
       checkoutId: safeStr(c.checkoutId || c.CheckoutId),
       userId: safeStr(c.userId || c.UserId),
@@ -254,7 +264,7 @@ export const fetchAppData = async (): Promise<AppData> => {
       timestamp: safeNum(c.timestamp || c.Timestamp),
     }));
 
-    const rawInteractions = (data.interactions || []).map((i: any) => ({
+    const rawInteractions = interactionList.map((i: any) => ({
         ...i,
         interactionId: safeStr(i.interactionId || i.InteractionId),
         checkoutId: safeStr(i.checkoutId || i.CheckoutId),
@@ -264,7 +274,7 @@ export const fetchAppData = async (): Promise<AppData> => {
         timestamp: safeNum(i.timestamp || i.Timestamp),
     }));
 
-    const rawUsers: User[] = (data.users || []).map((u: any) => ({
+    const rawUsers: User[] = userList.map((u: any) => ({
         userId: safeStr(u.userId || u.UserId),
         name: u.name || u.Name,
         role: (u.role || u.Role) as UserRole,
