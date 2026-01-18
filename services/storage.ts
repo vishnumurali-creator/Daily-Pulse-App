@@ -287,12 +287,21 @@ export const fetchAppData = async (): Promise<AppData> => {
 
 export const syncItem = async (type: string, payload: any) => {
   if (!API_URL) return;
+  
+  // Helper: Convert keys to PascalCase (e.g. userId -> UserId) 
+  // to match standard Google Sheet Column Headers
+  const pascalPayload: any = {};
+  Object.keys(payload).forEach(key => {
+    const pascalKey = key.charAt(0).toUpperCase() + key.slice(1);
+    pascalPayload[pascalKey] = payload[key];
+  });
+
   try {
     await fetch(API_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, payload })
+      body: JSON.stringify({ type, payload: pascalPayload })
     });
   } catch (error) {
     console.error("Sync failed:", error);
