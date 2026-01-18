@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
 import { User, WeeklyGoal } from '../types';
-import { snapToMonday } from '../services/storage';
 import { 
   Plus, 
   Calendar, 
@@ -89,8 +88,9 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
     e.preventDefault();
     if (!title.trim()) return;
 
-    const derivedWeekOfDate = snapToMonday(startDate);
-
+    // CHANGED: Removed derivedWeekOfDate calculation (snapToMonday).
+    // Using startDate directly for both startDate and legacy weekOfDate field.
+    
     onAddWeeklyGoal({
       userId: currentUser.userId,
       title,
@@ -100,7 +100,7 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
       dependency,
       startDate,
       endDate,
-      weekOfDate: derivedWeekOfDate, 
+      weekOfDate: startDate, // Legacy field now just mirrors startDate
       status: 'Not Started',
       retroText: ''
     });
