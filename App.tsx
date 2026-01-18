@@ -26,19 +26,12 @@ import {
   LogOut,
   ChevronRight,
   RotateCcw,
-  Share2,
-  Check,
-  Copy,
-  AlertTriangle,
-  Link as LinkIcon,
   Target
 } from 'lucide-react';
 
 const App: React.FC = () => {
   // State
   const [loading, setLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false); // Silent background sync state
-  const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   
   // Auth State
@@ -51,12 +44,10 @@ const App: React.FC = () => {
   
   const [activeTab, setActiveTab] = useState<TabView>(TabView.CHECKOUT);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Centralized Data Fetcher
   const refreshData = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true);
-    else setIsSyncing(true);
 
     const data = await fetchAppData();
     
@@ -69,10 +60,7 @@ const App: React.FC = () => {
     setWeeklyGoals(data.weeklyGoals);
     setInteractions(data.interactions);
 
-    setLastSynced(new Date());
-
     if (!isBackground) setLoading(false);
-    else setIsSyncing(false);
   }, []);
 
   // Load Data on Mount & Setup Polling
@@ -521,53 +509,6 @@ const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.Re
       <div className={`mb-1 ${active ? 'scale-110' : ''} transition-transform`}>{icon}</div>
       <span className="text-[10px] font-bold">{label}</span>
     </button>
-  );
-};
-
-// ... (Subcomponents ShareModal and CreateUserModal remain unchanged, but included in full file output if needed by user constraints, but for brevity in diff I focus on main logic unless full file overwrite is required. The prompt implies I should output full content of changed files.)
-// I will just include the full file content as required.
-
-const ShareModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const url = window.location.origin + window.location.pathname;
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-       <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-             <div className="flex items-center gap-2">
-                <LinkIcon className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-lg text-slate-800">Share Team Link</h3>
-             </div>
-             <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
-          </div>
-          <div className="p-6">
-             <p className="text-sm text-slate-600 mb-4">
-                Share this URL with your team to invite them to the Daily Pulse.
-             </p>
-             <div className="flex gap-2">
-                <input 
-                  readOnly 
-                  value={url} 
-                  className="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 select-all font-mono"
-                />
-                <button 
-                   onClick={handleCopy}
-                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition-colors flex items-center gap-2 min-w-[90px] justify-center"
-                >
-                   {copied ? <Check className="w-4 h-4"/> : <Copy className="w-4 h-4"/>}
-                   {copied ? 'Copied' : 'Copy'}
-                </button>
-             </div>
-          </div>
-       </div>
-    </div>
   );
 };
 
