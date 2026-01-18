@@ -17,7 +17,8 @@ import {
   PlayCircle,
   ListTodo,
   Users,
-  Eye
+  Eye,
+  Database
 } from 'lucide-react';
 
 interface WeeklyGoalsProps {
@@ -66,11 +67,17 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
     return baseList;
   }, [weeklyGoals, currentUser.userId, showAllTeam]);
 
+  // CHANGED: Only strictly 'Completed' items are archived.
+  // 'Partially Completed', 'In Progress', etc. remain in the Active list.
   const isArchived = (goal: WeeklyGoal) => {
-    return goal.status === 'Completed' || goal.status === 'Partially Completed';
+    return goal.status === 'Completed';
   };
 
   const activeGoals = visibleGoals.filter(g => !isArchived(g)).sort((a, b) => {
+    // Sort by Priority first (High -> Low), then Date
+    const pScore = (p: string) => (p === 'High' ? 3 : p === 'Medium' ? 2 : 1);
+    const scoreDiff = pScore(b.priority) - pScore(a.priority);
+    if (scoreDiff !== 0) return scoreDiff;
     return (b.startDate || '').localeCompare(a.startDate || '');
   });
   
@@ -258,7 +265,12 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
         </h3>
         {activeGoals.length === 0 && (
           <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-500 text-sm">
-             {showAllTeam ? 'No active goals found in the entire sheet.' : 'No active goals. Start planning above!'}
+             {showAllTeam ? 'No active goals found in the entire sheet.' : 'No active goals found for you.'}
+             {weeklyGoals.length > 0 && !showAllTeam && (
+                <div className="mt-2 text-xs text-indigo-600 cursor-pointer" onClick={() => setShowAllTeam(true)}>
+                    (There are {weeklyGoals.length} total goals in the system. Click "View All" to check ownership.)
+                </div>
+             )}
           </div>
         )}
         {activeGoals.map(goal => (
@@ -274,14 +286,14 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
       </div>
 
       {/* Archived Goals */}
-      <div className="pt-6">
+      <div className="pt-6 border-t border-slate-200 mt-8">
          <button 
            onClick={() => setShowArchived(!showArchived)}
            className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-bold text-sm w-full"
          >
             {showArchived ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             <Archive className="w-4 h-4" />
-            Archived Goals ({archivedGoals.length})
+            Completed / Archived ({archivedGoals.length})
          </button>
 
          {showArchived && (
@@ -296,9 +308,20 @@ const WeeklyGoals: React.FC<WeeklyGoalsProps> = ({
                    showUserLabel={showAllTeam}
                  />
               ))}
-              {archivedGoals.length === 0 && <p className="text-slate-400 text-sm italic pl-6">No archived goals yet.</p>}
+              {archivedGoals.length === 0 && <p className="text-slate-400 text-sm italic pl-6">No completed goals yet.</p>}
            </div>
          )}
+      </div>
+
+      {/* Debug Info */}
+      <div className="mt-12 pt-4 border-t border-dashed border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
+         <div className="flex items-center gap-2">
+            <Database className="w-3 h-3" />
+            <span>Total Rows Fetched: {weeklyGoals.length}</span>
+         </div>
+         <div>
+            Sync Status: Live
+         </div>
       </div>
 
     </div>
