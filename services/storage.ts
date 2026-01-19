@@ -1,4 +1,3 @@
-
 import { DailyCheckout, Task, Interaction, User, WeeklyGoal, UserRole } from '../types';
 import { INITIAL_USERS, INITIAL_CHECKOUTS, INITIAL_TASKS, INITIAL_INTERACTIONS, INITIAL_WEEKLY_GOALS } from '../constants';
 
@@ -191,18 +190,8 @@ export const fetchAppData = async (): Promise<AppData> => {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
     const data = await response.json();
-    
-    // Support JSON standard, PascalCase (Sheet Names), and Spaced Names (User Error)
-    const taskList = data.tasks || data.Tasks || data['Tasks'] || [];
-    
-    // 🔥 ROBUST CHECK: Look for 'WeeklyGoals', 'weeklyGoals', or 'Weekly Goals'
-    const goalList = data.weeklyGoals || data.WeeklyGoals || data['Weekly Goals'] || [];
-    
-    const checkoutList = data.checkouts || data.Checkouts || data['Checkouts'] || [];
-    const interactionList = data.interactions || data.Interactions || data['Interactions'] || [];
-    const userList = data.users || data.Users || data['Users'] || [];
 
-    const rawTasks = taskList.map((t: any) => ({
+    const rawTasks = (data.tasks || []).map((t: any) => ({
       ...t,
       taskId: safeStr(t.taskId || t.TaskId),
       userId: safeStr(t.userId || t.UserId),
@@ -214,14 +203,18 @@ export const fetchAppData = async (): Promise<AppData> => {
       scheduledDate: normalizeDate(t.scheduledDate || t.ScheduledDate),
     }));
 
-    const rawGoals = goalList.map((g: any, index: number) => {
+    const rawGoals = (data.weeklyGoals || []).map((g: any, index: number) => {
         const gid = safeStr(g.goalId || g.GoalId);
         
         // 1. Get raw values for legacy field
         const rawWeekDate = g.weekOfDate || g.WeekOfDate || g['Week Of Date'] || g['Week of Date'];
         
         // 2. Intelligent Fetch for Start/End Date
+        // Fallback: If 'startDate' column is empty, use 'weekOfDate' column value.
+        // This ensures that even if the new columns fail to save, we get the date from the legacy column.
         const sDateRaw = g.startDate || g.StartDate || g.startdate || rawWeekDate; 
+        
+        // Fallback: If 'endDate' is empty, default to 'startDate'
         const eDateRaw = g.endDate || g.EndDate || g.enddate || sDateRaw;
 
         const sDate = normalizeDate(sDateRaw);
@@ -233,22 +226,21 @@ export const fetchAppData = async (): Promise<AppData> => {
             userId: safeStr(g.userId || g.UserId),
             title: g.title || g.Title || 'Untitled Goal',
             definitionOfDone: g.definitionOfDone || g.DefinitionOfDone || '',
-            steps: g.steps || g.Steps || '', 
             priority: g.priority || g.Priority || 'Medium',
             dependency: g.dependency || g.Dependency || '',
             status: safeStr(g.status || g.Status || 'Not Started'),
             retroText: g.retroText || g.RetroText || '',
             
-            // Legacy support
+            // Legacy support: We still try to populate this, but we use the start date we found
             weekOfDate: snapToMonday(sDate || rawWeekDate), 
             
-            // New Fields
+            // New Fields: These now robustly fallback to the WeekOfDate column if needed
             startDate: sDate,
             endDate: eDate
         };
     });
 
-    const rawCheckouts = checkoutList.map((c: any) => ({
+    const rawCheckouts = (data.checkouts || []).map((c: any) => ({
       ...c,
       checkoutId: safeStr(c.checkoutId || c.CheckoutId),
       userId: safeStr(c.userId || c.UserId),
@@ -260,7 +252,7 @@ export const fetchAppData = async (): Promise<AppData> => {
       timestamp: safeNum(c.timestamp || c.Timestamp),
     }));
 
-    const rawInteractions = interactionList.map((i: any) => ({
+    const rawInteractions = (data.interactions || []).map((i: any) => ({
         ...i,
         interactionId: safeStr(i.interactionId || i.InteractionId),
         checkoutId: safeStr(i.checkoutId || i.CheckoutId),
@@ -270,7 +262,7 @@ export const fetchAppData = async (): Promise<AppData> => {
         timestamp: safeNum(i.timestamp || i.Timestamp),
     }));
 
-    const rawUsers: User[] = userList.map((u: any) => ({
+    const rawUsers: User[] = (data.users || []).map((u: any) => ({
         userId: safeStr(u.userId || u.UserId),
         name: u.name || u.Name,
         role: (u.role || u.Role) as UserRole,
@@ -293,19 +285,12 @@ export const fetchAppData = async (): Promise<AppData> => {
 
 export const syncItem = async (type: string, payload: any) => {
   if (!API_URL) return;
-  
-  const pascalPayload: any = {};
-  Object.keys(payload).forEach(key => {
-    const pascalKey = key.charAt(0).toUpperCase() + key.slice(1);
-    pascalPayload[pascalKey] = payload[key];
-  });
-
   try {
     await fetch(API_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, payload: pascalPayload })
+      body: JSON.stringify({ type, payload })
     });
   } catch (error) {
     console.error("Sync failed:", error);

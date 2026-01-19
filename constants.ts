@@ -1,4 +1,3 @@
-
 import { User, UserRole, DailyCheckout, Task, Interaction, WeeklyGoal } from './types';
 
 // Mock Users
@@ -109,7 +108,6 @@ export const INITIAL_WEEKLY_GOALS: WeeklyGoal[] = [
     endDate: nextWeekStr,
     title: 'Ship the MVP Authentication',
     definitionOfDone: 'Users can login, logout, and session persists.',
-    steps: '- Setup Firebase Auth\n- Create Login UI Component\n- Connect State Management\n- Add Error Handling',
     priority: 'High',
     dependency: 'Backend API readiness',
     status: 'Partially Completed',
@@ -123,7 +121,6 @@ export const INITIAL_WEEKLY_GOALS: WeeklyGoal[] = [
     endDate: nextWeekStr,
     title: 'Clean up technical debt',
     definitionOfDone: 'Remove all unused imports and console logs.',
-    steps: '- Run linter\n- Check all useEffect dependencies\n- Remove console.log statements',
     priority: 'Low',
     status: 'Not Started',
   }

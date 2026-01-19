@@ -1,4 +1,3 @@
-
 export enum UserRole {
   MANAGER = 'Manager',
   EMPLOYEE = 'Employee'
@@ -41,7 +40,6 @@ export interface WeeklyGoal {
   endDate?: string;   // New: YYYY-MM-DD
   title: string;
   definitionOfDone: string;
-  steps?: string; // New: Detailed steps to achieve the goal
   priority: 'High' | 'Medium' | 'Low';
   dependency?: string;
   status: 'Not Started' | 'In Progress' | 'Partially Completed' | 'Completed';

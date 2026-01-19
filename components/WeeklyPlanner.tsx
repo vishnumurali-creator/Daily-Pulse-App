@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Task, WeeklyGoal } from '../types';
 import { snapToMonday } from '../services/storage'; 
@@ -104,18 +103,11 @@ const Planner: React.FC<PlannerProps> = ({
   // "Selected Date" acts as our cursor. Defaults to today.
   const [selectedDate, setSelectedDate] = useState<string>(toLocalISO(new Date()));
 
-  // Navigation Logic still uses SnapToMonday to determine which week is "Active"
+  // ⭐️ CRITICAL LOGIC: 
+  // Regardless of what 'selectedDate' is (Tuesday, Sunday, etc.),
+  // 'currentWeekStart' is always the Monday of that week.
+  // This is used for BOTH fetching matching goals AND creating new ones.
   const currentWeekStart = useMemo(() => snapToMonday(selectedDate), [selectedDate]);
-  
-  // Determine Week End (Sunday) based on Start (Monday)
-  const currentWeekEnd = useMemo(() => {
-     if (!currentWeekStart) return '';
-     const parts = currentWeekStart.split('-').map(Number);
-     const d = new Date(parts[0], parts[1] - 1, parts[2]);
-     d.setDate(d.getDate() + 6);
-     return toLocalISO(d);
-  }, [currentWeekStart]);
-
   const weekRange = useMemo(() => getWeekRange(currentWeekStart), [currentWeekStart]);
 
   // Form State
@@ -164,19 +156,16 @@ const Planner: React.FC<PlannerProps> = ({
   const totalDailyPomos = myDailyTasks.reduce((acc, t) => acc + t.estimatedPomodoros, 0);
   const isOverworked = totalDailyPomos > 16;
 
-  // 2. Weekly Goals: Filter by "Date Range Overlap" rather than strict week match
+  // 2. Weekly Goals: Filter by "Snapped Monday"
+  // Logic: Ensure both the goal's date and the current view are snapped to Monday before comparing.
   const myWeeklyGoals = weeklyGoals.filter(g => {
     if (g.userId !== currentUser.userId) return false;
     
-    // Fallback to legacy field if new fields missing
-    const gStart = g.startDate || g.weekOfDate || '';
-    const gEnd = g.endDate || gStart || '';
-
-    // Logic: Is there any overlap between [GoalStart, GoalEnd] and [WeekStart, WeekEnd]?
-    // Standard Overlap Formula: StartA <= EndB && EndA >= StartB
-    if (!gStart || !currentWeekStart) return false;
-
-    return gStart <= currentWeekEnd && gEnd >= currentWeekStart;
+    // Safety: normalize the goal's week date from the backend to ensure it is a Monday
+    const goalMonday = snapToMonday(g.weekOfDate);
+    
+    // Compare strictly
+    return goalMonday === currentWeekStart;
   });
 
   // --- ACTIONS ---
@@ -200,12 +189,11 @@ const Planner: React.FC<PlannerProps> = ({
     e.preventDefault();
     if (!newGoalTitle.trim()) return;
 
-    // ⭐️ LOGIC: When creating a goal in this view, default to the currently viewed week's Start/End
+    // ⭐️ LOGIC: When creating a goal, we ALWAYS force the date to be the Monday of the current view.
+    // Even if today is Tuesday, the goal is saved as "Monday, Dec XX".
     onAddWeeklyGoal({
       userId: currentUser.userId,
-      weekOfDate: currentWeekStart, // Legacy support
-      startDate: currentWeekStart,  // Monday
-      endDate: currentWeekEnd,      // Sunday
+      weekOfDate: currentWeekStart, 
       title: newGoalTitle,
       definitionOfDone: newGoalDoD,
       priority: newGoalPriority,
